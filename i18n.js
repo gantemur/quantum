@@ -1,4 +1,4 @@
-import type { Language } from './lessons.ts';
+                                             
 
 const en = {
   brand: 'Quantum laboratory', subtitle: 'An experiment in two dimensions', qubit: 'One qubit',
@@ -66,7 +66,7 @@ const en = {
   instruction: 'Choose a panel view', savedProtocol: 'Saved protocol',
 };
 
-const mn: Record<keyof typeof en, string> = {
+const mn                                  = {
   brand: 'Квантын лаборатори', subtitle: 'Хоёр хэмжээст огторгуй дахь туршилт', qubit: 'Нэг кубит',
   title: 'Нэг төлөв. Олон дүрслэл.', intro: 'Кубит бэлтгэж, асуултаа сонгоод, тооцооны үр дүнг математиктай нь холбоорой.',
   stateMode: 'Төлөв ба хэмжилт', timeMode: 'Хугацааны хувьсал', familyMode: 'Спектр ба параметр',
@@ -132,7 +132,7 @@ const mn: Record<keyof typeof en, string> = {
   instruction: 'Самбарын дүрслэл сонгох', savedProtocol: 'Хадгалсан дараалал',
 };
 
-export type TextKey = keyof typeof en;
-export function translator(lang: Language): (key: TextKey) => string {
+                                      
+export function translator(lang          )                           {
   return (key) => (lang === 'mn' ? mn : en)[key];
 }

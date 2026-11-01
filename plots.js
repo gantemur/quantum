@@ -1,20 +1,20 @@
-import type { Vec3 } from './quantum.ts';
+                                         
 
-export interface Series {
-  label: string;
-  color: string;
-  data: readonly (readonly [number, number])[];
-}
+                         
+                
+                
+                                               
+ 
 
-export interface ChartOptions {
-  xLabel: string;
-  yLabel: string;
-  xRange: readonly [number, number];
-  yRange: readonly [number, number];
-  cursor?: number;
-  id: string;
-  ariaLabel: string;
-}
+                               
+                 
+                 
+                                    
+                                    
+                  
+             
+                    
+ 
 
 const INK = '#153e50';
 const TEAL = '#138a80';
@@ -23,28 +23,28 @@ const GRID = '#ebece6';
 const PALETTE = [TEAL, AMBER, '#6b76a0'];
 const FONT = "Georgia, 'Times New Roman', serif";
 const DASHES = ['', '7 4', '2 4'];
-const XML_ENTITIES: Record<string, string> = {
+const XML_ENTITIES                         = {
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;',
 };
 
-function xml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => XML_ENTITIES[char]!);
+function xml(value        )         {
+  return value.replace(/[&<>"']/g, (char) => XML_ENTITIES[char] );
 }
 
-function safeId(value: string): string {
+function safeId(value        )         {
   return `q-${value.replace(/[^A-Za-z0-9_-]/g, '-') || 'plot'}`;
 }
 
-function color(value: string, index: number): string {
+function color(value        , index        )         {
   // Colors are presentation data, never arbitrary SVG paint-server URLs.
-  return /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value) ? value : PALETTE[index % PALETTE.length]!;
+  return /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value) ? value : PALETTE[index % PALETTE.length] ;
 }
 
-function coord(value: number): string {
+function coord(value        )         {
   return Number(value.toFixed(3)).toString();
 }
 
-function rangeSpan(range: readonly [number, number]): number {
+function rangeSpan(range                           )         {
   const span = range[1] - range[0];
   if (!range.every(Number.isFinite) || !Number.isFinite(span) || span <= 0) {
     throw new RangeError('Chart ranges must be finite and strictly increasing.');
@@ -52,7 +52,7 @@ function rangeSpan(range: readonly [number, number]): number {
   return span;
 }
 
-function ticks(range: readonly [number, number]): { values: number[]; step: number } {
+function ticks(range                           )                                     {
   const span = rangeSpan(range);
   const raw = span / 5;
   const power = 10 ** Math.floor(Math.log10(raw));
@@ -60,7 +60,7 @@ function ticks(range: readonly [number, number]): { values: number[]; step: numb
   const unit = fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 2.5 ? 2.5 : fraction <= 5 ? 5 : 10;
   const step = unit * power || span / 4;
   const first = Math.ceil((range[0] - span * 1e-10) / step);
-  const values: number[] = [];
+  const values           = [];
   for (let i = 0; i < 20; i++) {
     const value = (first + i) * step;
     if (value > range[1] + span * 1e-10) break;
@@ -69,7 +69,7 @@ function ticks(range: readonly [number, number]): { values: number[]; step: numb
   return { values, step };
 }
 
-function tickText(value: number, step: number): string {
+function tickText(value        , step        )         {
   if (value === 0) return '0';
   const absolute = Math.abs(value);
   if (absolute >= 10000 || absolute < 0.001) {
@@ -80,9 +80,9 @@ function tickText(value: number, step: number): string {
 }
 
 function polylinePath(
-  points: readonly (readonly [number, number])[],
-  project: (point: readonly [number, number]) => readonly [number, number],
-): string {
+  points                                        ,
+  project                                                                 ,
+)         {
   let drawing = false;
   let result = '';
   for (const point of points) {
@@ -102,7 +102,7 @@ function polylinePath(
 }
 
 /** A static plot: it only renders supplied data and never evaluates a model. */
-export function lineChart(series: Series[], options: ChartOptions): string {
+export function lineChart(series          , options              )         {
   const width = 620;
   const height = 310;
   const left = 64;
@@ -113,8 +113,8 @@ export function lineChart(series: Series[], options: ChartOptions): string {
   const plotHeight = height - top - bottom;
   const xSpan = rangeSpan(options.xRange);
   const ySpan = rangeSpan(options.yRange);
-  const X = (x: number) => left + (x - options.xRange[0]) * plotWidth / xSpan;
-  const Y = (y: number) => top + (options.yRange[1] - y) * plotHeight / ySpan;
+  const X = (x        ) => left + (x - options.xRange[0]) * plotWidth / xSpan;
+  const Y = (y        ) => top + (options.yRange[1] - y) * plotHeight / ySpan;
   const xt = ticks(options.xRange);
   const yt = ticks(options.yRange);
   const id = safeId(options.id);
@@ -159,7 +159,7 @@ export function lineChart(series: Series[], options: ChartOptions): string {
 }
 
 /** Orthographic projection of a unit Bloch sphere, with no inferred state for null. */
-export function blochSvg(r: Vec3 | null, rawId: string, ariaLabel: string): string {
+export function blochSvg(r             , rawId        , ariaLabel        )         {
   if (r !== null && (r.length !== 3 || !r.every(Number.isFinite) || Math.hypot(...r) > 1 + 1e-8)) {
     throw new RangeError('The Bloch vector must be finite and lie in the unit ball.');
   }
@@ -171,12 +171,12 @@ export function blochSvg(r: Vec3 | null, rawId: string, ariaLabel: string): stri
   const id = safeId(rawId);
   const azimuth = Math.PI / 6;
   const elevation = 40 * Math.PI / 180;
-  const project = ([x, y, z]: Vec3): readonly [number, number] => [
+  const project = ([x, y, z]      )                            => [
     cx + radius * (Math.cos(azimuth) * x - Math.sin(azimuth) * y),
     cy + radius * (Math.sin(azimuth) * Math.sin(elevation) * x + Math.cos(azimuth) * Math.sin(elevation) * y - Math.cos(elevation) * z),
   ];
-  const curve = (point: (angle: number) => Vec3) => Array.from({ length: 97 }, (_, i) => project(point(2 * Math.PI * i / 96)));
-  const ringPath = (points: readonly (readonly [number, number])[]) => polylinePath(points, (p) => p);
+  const curve = (point                         ) => Array.from({ length: 97 }, (_, i) => project(point(2 * Math.PI * i / 96)));
+  const ringPath = (points                                        ) => polylinePath(points, (p) => p);
   const latitudes = [-0.6, 0, 0.6].map((z) => {
     const radiusXY = Math.sqrt(1 - z * z);
     return `<path d="${ringPath(curve((a) => [radiusXY * Math.cos(a), radiusXY * Math.sin(a), z]))}"/>`;
@@ -184,7 +184,7 @@ export function blochSvg(r: Vec3 | null, rawId: string, ariaLabel: string): stri
   const meridians = [0, Math.PI / 4, Math.PI / 2, 3 * Math.PI / 4].map((a) =>
     `<path d="${ringPath(curve((t) => [Math.cos(a) * Math.cos(t), Math.sin(a) * Math.cos(t), Math.sin(t)]))}"/>`,
   ).join('');
-  const axes: readonly { direction: Vec3; label: string; dx: number; dy: number }[] = [
+  const axes                                                                        = [
     { direction: [1, 0, 0], label: 'x', dx: 13, dy: 4 },
     { direction: [0, 1, 0], label: 'y', dx: -10, dy: 15 },
     { direction: [0, 0, 1], label: 'z', dx: 0, dy: -12 },

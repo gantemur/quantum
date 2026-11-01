@@ -1,0 +1,33 @@
+{
+  "version": "0.1.0",
+  "revision": "672ddff2a0e247e6499cc233001fbbd64f911d07",
+  "sourceFile": "src/quantum.ts",
+  "sourceHash": "afb8c0a4e0694a761de21fc544d5a880c59576c10db2c26480db127514fcb360",
+  "snippets": {
+    "probabilities": {
+      "code": "export function probabilities(r: Vec3, n: Vec3): { plus: number; minus: number } {\n  state(r);\n  const direction = unit(n);\n  // Tr(rho P+) = (1 + r · n)/2. Clamp only boundary roundoff.\n  const plus = Math.max(0, Math.min(1, (1 + dot(r, direction)) / 2));\n  return { plus, minus: 1 - plus };\n}",
+      "startLine": 140,
+      "endLine": 146
+    },
+    "rotate": {
+      "code": "export function rotate(r: Vec3, n: Vec3, angle: number): Vec3 {\n  state(r);\n  const a = unit(n);\n  finite(angle, 'rotation angle');\n  const c = Math.cos(angle), s = Math.sin(angle);\n  const parallel = dot(a, r) * (1 - c);\n  const cross: Vec3 = [a[1] * r[2] - a[2] * r[1], a[2] * r[0] - a[0] * r[2], a[0] * r[1] - a[1] * r[0]];\n  // U = exp(-i angle n · sigma / 2) acts as this spatial rotation.\n  return [c * r[0] + s * cross[0] + parallel * a[0],\n    c * r[1] + s * cross[1] + parallel * a[1],\n    c * r[2] + s * cross[2] + parallel * a[2]];\n}",
+      "startLine": 150,
+      "endLine": 161
+    },
+    "spectral": {
+      "code": "export function evolveSpectral(r: Vec3, h: Vec3, time: number): Vec3 {\n  const rho = densityMatrix(r);\n  const energy = norm(h);\n  finite(time, 'physical time');\n  if (energy === 0) return [r[0], r[1], r[2]];\n  const phase = finite(energy * time, 'spectral phase');\n  const [nx, ny, nz] = unit(h);\n  const c = Math.cos(phase), s = Math.sin(phase);\n  // Spectral sum U = exp(-iEt) P+ + exp(iEt) P-.\n  const U: Matrix2 = [[complex(c, -s * nz), complex(-s * ny, -s * nx)],\n    [complex(s * ny, -s * nx), complex(c, s * nz)]];\n  const evolved = multiplyMatrices(multiplyMatrices(U, rho), adjoint(U));\n  return [2 * evolved[0][1].re, -2 * evolved[0][1].im,\n    evolved[0][0].re - evolved[1][1].re];\n}",
+      "startLine": 165,
+      "endLine": 179
+    },
+    "spectrum": {
+      "code": "export function spectrum(h: Vec3): {\n  energies: readonly [number, number]; lower: Vec3 | null; upper: Vec3 | null; gap: number;\n} {\n  const energy = norm(h);\n  // At the degeneracy the eigenspace is the full space: no unique axis.\n  if (energy === 0) return { energies: [0, 0], lower: null, upper: null, gap: 0 };\n  const upper = unit(h);\n  const lower: Vec3 = [-upper[0], -upper[1], -upper[2]];\n  return { energies: [-energy, energy], lower, upper, gap: finite(2 * energy, 'energy gap') };\n}",
+      "startLine": 191,
+      "endLine": 200
+    },
+    "measure": {
+      "code": "export function measure(r: Vec3, n: Vec3, draw: number): { outcome: Outcome; probability: number; state: Vec3 } {\n  if (!Number.isFinite(draw) || draw < 0 || draw >= 1) throw new RangeError('A draw must lie in [0, 1)');\n  const direction = unit(n);\n  const p = probabilities(r, direction);\n  const outcome: Outcome = draw < p.plus ? 1 : -1;\n  // Conditioning on a rank-one Pauli outcome prepares its eigenstate.\n  return { outcome, probability: outcome === 1 ? p.plus : p.minus,\n    state: [outcome * direction[0], outcome * direction[1], outcome * direction[2]] };\n}",
+      "startLine": 204,
+      "endLine": 212
+    }
+  }
+}

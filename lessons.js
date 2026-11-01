@@ -1,30 +1,30 @@
 /** Original teaching material for the finite two-state experiment. */
-export type Language = 'mn' | 'en';
+                                   
 
-export interface Exercise {
-  id: string;
-  title: string;
-  question: string;
-  steps: string[];
-  check: string;
-  hint: string;
-  preset: 'phase' | 'sequence' | 'mixture';
-}
+                           
+             
+                
+                   
+                  
+                
+               
+                                           
+ 
 
-export interface LessonContent {
-  mathTitle: string;
-  mathHtml: string;
-  methodTitle: string;
-  methodHtml: string;
-  exercisesTitle: string;
-  exercises: Exercise[];
-  projectsTitle: string;
-  project: { title: string; question: string; steps: string[]; check: string };
-  glossaryTitle: string;
-  glossaryHtml: string;
-}
+                                
+                    
+                   
+                      
+                     
+                         
+                        
+                        
+                                                                               
+                        
+                       
+ 
 
-const lessons: Record<Language, LessonContent> = {
+const lessons                                  = {
   mn: {
     mathTitle: 'Математик',
     mathHtml: `
@@ -273,6 +273,6 @@ const lessons: Record<Language, LessonContent> = {
 };
 
 /** Returns authored content only. Opening it never applies a preset. */
-export function lessonContent(lang: Language): LessonContent {
+export function lessonContent(lang          )                {
   return lessons[lang];
 }
