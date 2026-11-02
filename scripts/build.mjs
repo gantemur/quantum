@@ -20,7 +20,7 @@ await cp(path.join(root, 'src/style.css'), path.join(out, 'style.css'));
 
 const snippets = {};
 const sourceFiles = {};
-for (const sourceFile of ['src/quantum.ts', 'src/box.ts']) {
+for (const sourceFile of ['src/quantum.ts', 'src/box.ts', 'src/oscillator.ts']) {
   const source = await readFile(path.join(root, sourceFile), 'utf8');
   const sourceHash = createHash('sha256').update(source).digest('hex');
   sourceFiles[sourceFile] = sourceHash;
