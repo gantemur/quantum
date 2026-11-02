@@ -12,7 +12,7 @@ type Tool = 'bloch' | 'density' | 'probabilities' | 'amplitudes' | 'trajectory' 
 type Binding = { mode: Mode; r: Vec3 | null; time: TimeRun; family: FamilyRun; batch: BatchRun | null; operations: readonly Operation[]; timeIndex: number; familyIndex: number; branch: 'lower' | 'upper' };
 type Panel = { id: number; tool: Tool; basis: Axis; gamma: number; collapsed: boolean; pinned: Binding | null };
 type SourceInfo = { version: string; revision: string | null; sourceHash: string; sourceFile: string; sourceFiles?: Record<string, string>; snippets: Record<string, { code: string; startLine: number; endLine: number; sourceFile?: string; sourceHash?: string }> };
-type System = 'qubit' | 'box';
+type System = 'qubit' | 'box' | 'oscillator';
 let system: System = 'qubit';
 
 let lab = createLab();
@@ -47,6 +47,7 @@ let renderedContext = '';
 const words = (mn: string, en: string): string => lang === 'mn' ? mn : en;
 function captureDetails(): void {
   if (system === 'box') { captureBoxDetails(app); return; }
+  if (system === 'oscillator') { captureOscillatorDetails(app); return; }
   for (const d of app.querySelectorAll<HTMLDetailsElement>('details[id]')) d.open ? openSections.add(d.id) : openSections.delete(d.id);
 }
 function saveSession(): void {
