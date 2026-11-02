@@ -34,7 +34,7 @@ for (const sourceFile of ['src/quantum.ts', 'src/box.ts', 'src/oscillator.ts']) 
     snippets[start[1]] = { code: lines.slice(i + 1, end).join('\n'), startLine: i + 2, endLine: end, sourceFile, sourceHash };
   }
 }
-for (const name of ['probabilities', 'spectral', 'rotate', 'spectrum', 'measure', 'box-wavefunction', 'box-evolution', 'box-energy-measurement']) {
+for (const name of ['probabilities', 'spectral', 'rotate', 'spectrum', 'measure', 'box-wavefunction', 'box-evolution', 'box-energy-measurement', 'oscillator-coherent', 'oscillator-ritz', 'oscillator-variational']) {
   if (!snippets[name]) throw new Error(`Required source excerpt missing: ${name}`);
 }
 let revision = process.env.SOURCE_REVISION || '';
