@@ -168,8 +168,14 @@ export function optimizeGaussian(coupling: number, beta0: number, step: number, 
     const energy = gaussianEnergy(beta, coupling), gradient = gaussianGradient(beta, coupling);
     points.push({ iteration: k, beta, energy, gradient });
     if (k === iterations) break;
-    const full = Math.max(0.05, Math.min(20, beta - step * gradient));
-    beta = gaussianEnergy(full, coupling) <= energy ? full : Math.max(0.05, Math.min(20, beta - 0.25 * step * gradient));
+    let trialStep = step;
+    let next = beta;
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const candidate = Math.max(0.05, Math.min(20, beta - trialStep * gradient));
+      if (gaussianEnergy(candidate, coupling) <= energy) { next = candidate; break; }
+      trialStep *= 0.5;
+    }
+    beta = next;
   }
   return { coupling, beta0, step, iterations, points };
 }
