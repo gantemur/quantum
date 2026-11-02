@@ -318,6 +318,7 @@ app.addEventListener('click', event => {
   const action = target.dataset.action, id = Number(target.dataset.id);
   if (action?.startsWith('export-')) { exportCurrent(action); return; }
   if (system === 'box' && action !== 'language') { captureBoxDetails(app); if (handleBoxClick(target)) render(false); return; }
+  if (system === 'oscillator' && action !== 'language') { captureOscillatorDetails(app); if (handleOscillatorClick(target)) render(false); return; }
   const p = panels[mode].find(x => x.id === id);
   const form = target.closest('form');
   if (form && !form.reportValidity()) return;
