@@ -45,6 +45,6 @@ if (!revision) {
   } catch { /* Source hash still identifies a local/uncommitted build precisely. */ }
 }
 if (revision && !/^[a-f0-9]{40}$/.test(revision)) throw new Error('SOURCE_REVISION must be a full commit SHA');
-const metadata = { version: '0.2.0', revision: revision || null, sourceFile: 'src/quantum.ts', sourceHash: sourceFiles['src/quantum.ts'], sourceFiles, snippets };
+const metadata = { version: '0.3.0', revision: revision || null, sourceFile: 'src/quantum.ts', sourceHash: sourceFiles['src/quantum.ts'], sourceFiles, snippets };
 await writeFile(path.join(out, 'source.json'), JSON.stringify(metadata, null, 2) + '\n');
 console.log(`Built ${out}; ${Object.keys(snippets).length} exact numerical-source excerpts; SHA-256 ${metadata.sourceHash}`);
