@@ -25,5 +25,7 @@ jobs:
         if: always()
         with:
           name: browser-evidence
-          path: test-results/
+          path: |
+            test-results/
+            dist/
           retention-days: 7
