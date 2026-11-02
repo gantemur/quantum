@@ -124,7 +124,7 @@ export function anharmonicHamiltonian(count: number, coupling: number): number[]
 }
 
 function jacobiEigen(a0: readonly number[][]): { values: number[]; vectors: number[][] } {
-  const n = a0.length, a = a0.map(row => [...row]), v = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => i === j ? 1 : 0));
+  const n = a0.length, a = a0.map(row => [...row]);\n  const v: number[][] = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => i === j ? 1 : 0));
   for (let sweep = 0; sweep < 80 * n * n; sweep++) {
     let p = 0, q = 1, max = 0;
     for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (Math.abs(a[i][j]) > max) { max = Math.abs(a[i][j]); p = i; q = j; }
