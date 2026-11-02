@@ -303,11 +303,11 @@ function exportCurrent(kind: string): void {
     if (!svg) return;
     const element = svg.closest<HTMLElement>('[data-panel]')!;
     const select = element.querySelector<HTMLSelectElement>('.tool-select');
-    const title = `${system === 'box' ? words('1D хайрцаг', '1D box') : t('qubit')} · ${select?.selectedOptions[0]?.textContent ?? experimentLabel()}`;
+    const title = `${system === 'box' ? words('1D хайрцаг', '1D box') : system === 'oscillator' ? words('Осциллятор', 'Oscillator') : t('qubit')} · ${select?.selectedOptions[0]?.textContent ?? experimentLabel()}`;
     const caption = `${element.querySelector<HTMLElement>('.panel-binding')?.innerText?.replace(/\s+/g, ' ').trim() ?? ''} · ℏ = 1 · ${source?.revision?.slice(0, 12) ?? 'local'}`;
     const p = panels[mode].find(p => p.id === Number(element.dataset.panel));
     const bound = p?.pinned ?? binding();
-    const metadata = system === 'box' ? boxFigureMetadata(element.dataset.panel!) : { ...qubitData(bound).metadata, state: bound.r, cursor: bound.mode === 'time' ? timePoint(bound.time, bound.timeIndex).t : bound.mode === 'family' ? bound.family.points[bound.familyIndex].lambda : null, branch: bound.branch, panel: p ? { tool: p.tool, basis: p.basis, gamma: p.gamma, pinned: !!p.pinned } : null };
+    const metadata = system === 'box' ? boxFigureMetadata(element.dataset.panel!) : system === 'oscillator' ? oscillatorFigureMetadata(element.dataset.panel!) : { ...qubitData(bound).metadata, state: bound.r, cursor: bound.mode === 'time' ? timePoint(bound.time, bound.timeIndex).t : bound.mode === 'family' ? bound.family.points[bound.familyIndex].lambda : null, branch: bound.branch, panel: p ? { tool: p.tool, basis: p.basis, gamma: p.gamma, pinned: !!p.pinned } : null };
     downloadText(`${name}-figure.svg`, figureSvg(svg, title, caption, { ...metadata, provenance }), 'image/svg+xml');
   }
 }
