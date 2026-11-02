@@ -119,7 +119,7 @@ export function oscillatorTimeRun(alpha: Complex, count: number, end: number, pa
 
 export function anharmonicHamiltonian(count: number, coupling: number): number[][] {
   if (!Number.isInteger(count) || count < 2 || count > MAX_OSC_MODES || !Number.isFinite(coupling) || coupling < 0 || coupling > 2) throw new RangeError('invalid anharmonic basis or coupling');
-  const x = positionMatrix(count, { mass: 1, omega: 1 }), x2 = multiply(x, x), x4 = multiply(x2, x2);
+  const x4 = Array.from({ length: count }, (_, i) => Array.from({ length: count }, (_, j) => i === j ? 0.75 * (2 * i * i + 2 * i + 1) : Math.abs(i - j) === 2 ? 0.5 * (2 * Math.min(i, j) + 3) * Math.sqrt((Math.min(i, j) + 1) * (Math.min(i, j) + 2)) : Math.abs(i - j) === 4 ? 0.25 * Math.sqrt((Math.min(i, j) + 1) * (Math.min(i, j) + 2) * (Math.min(i, j) + 3) * (Math.min(i, j) + 4)) : 0));
   return Array.from({ length: count }, (_, i) => Array.from({ length: count }, (_, j) => (i === j ? i + 0.5 : 0) + coupling * x4[i][j]));
 }
 
