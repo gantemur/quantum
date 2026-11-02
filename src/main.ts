@@ -4,6 +4,7 @@ import { lessonContent, type Language } from './lessons.ts';
 import { translator, type TextKey } from './i18n.ts';
 import { blochSvg, lineChart } from './plots.ts';
 import { getBoxMode, selectBoxExperiment, renderBox, handleBoxClick, handleBoxInput, handleBoxChange, refreshBoxInputs, captureBoxDetails, boxSnapshot, boxExportSetup, boxExportData, boxFigureMetadata, type BoxMode } from './box-ui.ts';
+import { getOscillatorMode, selectOscillatorExperiment, renderOscillator, handleOscillatorClick, handleOscillatorInput, handleOscillatorChange, captureOscillatorDetails, oscillatorSnapshot, oscillatorExportSetup, oscillatorExportData, oscillatorFigureMetadata, type OscillatorMode } from './oscillator-ui.ts';
 import { dataCsv, downloadText, figureSvg, type DataExport } from './exports.ts';
 
 type Mode = 'state' | 'time' | 'family';
