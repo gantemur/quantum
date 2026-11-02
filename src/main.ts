@@ -245,7 +245,7 @@ function exportToolbar(): string {
 }
 function render(capture = true): void {
   const activeId = (document.activeElement as HTMLElement | null)?.id;
-  const context = `${system}:${system === 'qubit' ? mode : getBoxMode()}`;
+  const context = `${system}:${system === 'qubit' ? mode : system === 'box' ? getBoxMode() : getOscillatorMode()}`;
   if (capture && renderedContext === context) captureDetails();
   t = translator(lang); document.documentElement.lang = lang;
   document.querySelector<HTMLAnchorElement>('.skip')?.setAttribute('href', system === 'box' ? '#box-workspace' : '#workspace');
