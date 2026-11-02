@@ -113,6 +113,8 @@ function coordinate(): string {
 }
 
 export function renderOscillator(lang: Language, code: (id: string, title: string) => string): string {
+  const selected = typeof document === 'undefined' ? null : document.querySelector<HTMLSelectElement>('#experiment-select');
+  if (selected?.value === 'motion' || selected?.value === 'methods') mode = selected.value;
   language = lang;
   return `<div class="lab-layout"><aside class="controls" aria-label="${L('Туршилтын тохиргоо', 'Experiment setup')}">${mode === 'motion' ? motionControls() : methodControls()}</aside><section class="workspace" id="osc-workspace" tabindex="-1"><div class="workspace-top"><div><span class="eyebrow">${L('Тооцооллын арга', 'Computational method')}</span><button class="method-link" data-action="osc-show-method">${mode === 'motion' ? L('Аналитик суурь + спектрийн хувьсал', 'Analytic basis + spectral evolution') : L('Вариац + Рэлей–Ритц', 'Variational + Rayleigh–Ritz')} <span aria-hidden="true">↗</span></button></div><div class="workspace-actions">${button('osc-show-method', '&lt;/&gt;', 'code-button')}${mode === 'methods' ? button('osc-save-workspace', L('Хадгалах', 'Save'), 'secondary') : ''}</div></div>${coordinate()}<div class="notice ${notice?.error ? 'error' : ''}" id="osc-notice" role="status">${notice ? esc(notice[language]) : ''}</div><div class="panel-deck">${mode === 'motion' ? motionPanels() : methodPanels()}</div><div class="workspace-bottom"><span class="status-dot"></span>${L('Физик хугацаа ба алгоритмын итераци тусдаа координатууд.', 'Physical time and algorithm iteration are distinct coordinates.')}</div></section></div>${learning(code)}`;
 }
