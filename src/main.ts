@@ -381,6 +381,7 @@ app.addEventListener('click', event => {
 app.addEventListener('input', event => {
   const input = event.target as HTMLInputElement;
   if (system === 'box') { handleBoxInput(input); refreshBoxInputs(app, input, input.id === 'box-time' || input.id === 'box-time-value'); return; }
+  if (system === 'oscillator') { if (handleOscillatorInput(input)) render(false); return; }
   if (input.id === 'coordinate') { setCoordinate(Number(input.value)); return; }
   const key = input.dataset.draft as keyof typeof draft | undefined;
   if (key && input.type !== 'select-one') {
