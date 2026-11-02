@@ -218,9 +218,12 @@ function navigation(): string {
     ['state', words('Төлөв бэлтгэх ба хэмжих', 'State preparation & measurement')],
     ['time', words('Тогтмол H: хугацааны хувьсал', 'Time evolution at fixed H')],
     ['family', words('H(λ): параметрийн бүл', 'Hamiltonian parameter family')],
-  ] : [
+  ] : system === 'box' ? [
     ['state', words('Төлөв бүтээх ба энерги хэмжих', 'State construction & energy measurement')],
     ['time', words('Хугацааны хувьсал', 'Time evolution')],
+  ] : [
+    ['motion', words('Когерент төлөв ба хөдөлгөөн', 'Coherent state and motion')],
+    ['methods', words('Ангармоник ойролцооллын аргууд', 'Anharmonic approximation methods')],
   ];
   const question = system === 'box' ? (getBoxMode() === 'state'
     ? words('Комплекс коэффициентүүд байрлалын нягт ба энергийн магадлалыг хэрхэн тодорхойлох вэ?', 'How do complex coefficients determine position density and energy probabilities?')
