@@ -210,6 +210,7 @@ function learning(): string {
 }
 function experimentLabel(): string {
   if (system === 'box') return getBoxMode() === 'state' ? words('Төлөв бүтээх ба энерги хэмжих', 'State construction & energy measurement') : words('Хугацааны хувьсал', 'Time evolution');
+  if (system === 'oscillator') return getOscillatorMode() === 'motion' ? words('Когерент төлөв ба хөдөлгөөн', 'Coherent state and motion') : words('Ангармоник ойролцооллын аргууд', 'Anharmonic approximation methods');
   return words({ state: 'Төлөв бэлтгэх ба хэмжих', time: 'Тогтмол H: хугацааны хувьсал', family: 'H(λ): параметрийн бүл', }[mode], { state: 'State preparation & measurement', time: 'Time evolution at fixed H', family: 'Hamiltonian parameter family' }[mode]);
 }
 function navigation(): string {
