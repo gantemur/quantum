@@ -13,7 +13,7 @@ type Binding = { mode: Mode; r: Vec3 | null; time: TimeRun; family: FamilyRun; b
 type Panel = { id: number; tool: Tool; basis: Axis; gamma: number; collapsed: boolean; pinned: Binding | null };
 type SourceInfo = { version: string; revision: string | null; sourceHash: string; sourceFile: string; sourceFiles?: Record<string, string>; snippets: Record<string, { code: string; startLine: number; endLine: number; sourceFile?: string; sourceHash?: string }> };
 type System = 'qubit' | 'box' | 'oscillator';
-let system: System = 'qubit';
+let system: System = new URLSearchParams(location.search).get('system') === 'oscillator' ? 'oscillator' : 'qubit';
 
 let lab = createLab();
 let mode: Mode = 'state';
