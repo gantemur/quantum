@@ -44,6 +44,8 @@ The spectral method calculates `U rho U†`. The alternative method applies a sp
 
 Norm, purity, and the mean energy are conserved for this fixed closed-system model. There is no ODE integration step. There is still a display-sampling resolution: trajectories use at least 201 points and at least 32 samples per precession period over the declared interval. The UI bounds each h component to [-5,5] and the positive interval end to 100. Dense curves can still exceed a screen's visual resolution; shorten the interval to inspect individual oscillations. The selection cursor traverses retained points across the whole interval, and labels their actual physical times.
 
+Each experiment owns its preparation, draft settings, and retained results. Switching experiments or systems preserves those records without transferring a state or consuming a random draw. Explicit transfer buttons copy a current or selected state into another experiment; transferring a selected family eigenstate also copies its actual Hamiltonian, not an uncalculated draft. At a degenerate point the transfer is unavailable.
+
 A trajectory captures its input, Hamiltonian, interval, method, and run identity. Later live-state measurements do not silently modify it. A new calculation is required to use a changed input. At `h = 0`, evolution is the identity.
 
 ## A Hamiltonian family
@@ -54,7 +56,7 @@ This is a family of static problems. A driven crossing would additionally requir
 
 ## Source inspection and checks
 
-Short excerpts are extracted from marked regions of `src/quantum.ts` during the build. The build fails if a required fragment is absent. Their source hash identifies the same module that is compiled into the application. The excerpts retain function names, validation calls, and comments; helper definitions and complete context are available in the linked module. They are actual implementation source, not substituted pseudocode.
+Short excerpts are extracted from marked regions of `src/quantum.ts` and `src/box.ts` during the build. Each excerpt records its own source path, line range, and SHA-256; immutable links use the build’s full source revision when available. The build fails if a required fragment is absent. Their source hash identifies the same module that is compiled into the application. The excerpts retain function names, validation calls, and comments; helper definitions and complete context are available in the linked module. They are actual implementation source, not substituted pseudocode.
 
 The numerical core can be imported without the interface. Its tests use direct states, complex matrix operations, eigenpair residuals, an independent series calculation, and conditional probability fixtures. Result-orchestration and browser checks verify that representation, layout, language, and inspection do not mutate scientific results or advance random state.
 

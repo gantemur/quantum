@@ -43,7 +43,7 @@ async function english(page: Page): Promise<void> {
 }
 
 async function mode(page: Page, selected: Mode): Promise<void> {
-  await page.locator(`[data-action="mode"][data-mode="${selected}"]`).click();
+  await page.locator('#experiment-select').selectOption(selected);
   if (selected === 'time') await open(page, 'time-controls-section');
 }
 

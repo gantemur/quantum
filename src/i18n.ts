@@ -1,7 +1,7 @@
 import type { Language } from './lessons.ts';
 
 const en = {
-  brand: 'Quantum laboratory', subtitle: 'An experiment in two dimensions', qubit: 'One qubit',
+  brand: 'Quantum laboratory', subtitle: 'Systems, methods, and measurements', qubit: 'One qubit',
   title: 'A state. Many ways to see it.', intro: 'Prepare a qubit, choose a question, and connect the mathematics to what you observe.',
   stateMode: 'State & measurement', timeMode: 'Time evolution', familyMode: 'Spectrum & parameter',
   stateDescription: 'Inspect a state, predict outcomes, and make an explicit measurement.',
@@ -67,7 +67,7 @@ const en = {
 };
 
 const mn: Record<keyof typeof en, string> = {
-  brand: 'Квантын лаборатори', subtitle: 'Хоёр хэмжээст огторгуй дахь туршилт', qubit: 'Нэг кубит',
+  brand: 'Квантын лаборатори', subtitle: 'Систем, арга, хэмжилт', qubit: 'Нэг кубит',
   title: 'Нэг төлөв. Олон дүрслэл.', intro: 'Кубит бэлтгэж, асуултаа сонгоод, тооцооны үр дүнг математиктай нь холбоорой.',
   stateMode: 'Төлөв ба хэмжилт', timeMode: 'Хугацааны хувьсал', familyMode: 'Спектр ба параметр',
   stateDescription: 'Төлөвийг шинжилж, гаралтыг урьдчилан тооцоолоод, хэмжилт хийнэ.',

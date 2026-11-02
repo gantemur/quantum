@@ -18,17 +18,23 @@ for (const name of await readdir(path.join(root, 'src'))) {
 for (const name of ['index.html', 'icon.svg']) await cp(path.join(root, name), path.join(out, name));
 await cp(path.join(root, 'src/style.css'), path.join(out, 'style.css'));
 
-const source = await readFile(path.join(root, 'src/quantum.ts'), 'utf8');
-const lines = source.split('\n');
 const snippets = {};
-for (let i = 0; i < lines.length; i++) {
-  const start = lines[i].match(/@snippet ([\w-]+):start/);
-  if (!start) continue;
-  const end = lines.findIndex((line, n) => n > i && line.includes(`@snippet ${start[1]}:end`));
-  if (end < 0) throw new Error(`Missing end marker for ${start[1]}`);
-  snippets[start[1]] = { code: lines.slice(i + 1, end).join('\n'), startLine: i + 2, endLine: end };
+const sourceFiles = {};
+for (const sourceFile of ['src/quantum.ts', 'src/box.ts']) {
+  const source = await readFile(path.join(root, sourceFile), 'utf8');
+  const sourceHash = createHash('sha256').update(source).digest('hex');
+  sourceFiles[sourceFile] = sourceHash;
+  const lines = source.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const start = lines[i].match(/@snippet ([\w-]+):start/);
+    if (!start) continue;
+    const end = lines.findIndex((line, n) => n > i && line.includes(`@snippet ${start[1]}:end`));
+    if (end < 0) throw new Error(`Missing end marker for ${start[1]}`);
+    if (snippets[start[1]]) throw new Error(`Duplicate snippet: ${start[1]}`);
+    snippets[start[1]] = { code: lines.slice(i + 1, end).join('\n'), startLine: i + 2, endLine: end, sourceFile, sourceHash };
+  }
 }
-for (const name of ['probabilities', 'spectral', 'rotate', 'spectrum', 'measure']) {
+for (const name of ['probabilities', 'spectral', 'rotate', 'spectrum', 'measure', 'box-wavefunction', 'box-evolution', 'box-energy-measurement']) {
   if (!snippets[name]) throw new Error(`Required source excerpt missing: ${name}`);
 }
 let revision = process.env.SOURCE_REVISION || '';
@@ -39,6 +45,6 @@ if (!revision) {
   } catch { /* Source hash still identifies a local/uncommitted build precisely. */ }
 }
 if (revision && !/^[a-f0-9]{40}$/.test(revision)) throw new Error('SOURCE_REVISION must be a full commit SHA');
-const metadata = { version: '0.1.0', revision: revision || null, sourceFile: 'src/quantum.ts', sourceHash: createHash('sha256').update(source).digest('hex'), snippets };
+const metadata = { version: '0.2.0', revision: revision || null, sourceFile: 'src/quantum.ts', sourceHash: sourceFiles['src/quantum.ts'], sourceFiles, snippets };
 await writeFile(path.join(out, 'source.json'), JSON.stringify(metadata, null, 2) + '\n');
 console.log(`Built ${out}; ${Object.keys(snippets).length} exact numerical-source excerpts; SHA-256 ${metadata.sourceHash}`);

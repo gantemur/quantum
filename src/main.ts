@@ -1,14 +1,18 @@
 import { densityMatrix, spinor, probabilities, purity, norm, axisVector, dot, type Axis, type Complex, type Vec3 } from './quantum.ts';
-import { createLab, prepareState, reprepare, rotateState, measureState, runProtocol, calculateTime, calculateFamily, type TimeRun, type FamilyRun, type BatchRun, type EvolutionMethod, type Operation } from './lab.ts';
+import { createLab, prepareState, reprepare, rotateState, measureState, runProtocol, calculateTime, calculateFamily, type TimeRun, type FamilyRun, type BatchRun, type EvolutionMethod, type Operation, type Lab } from './lab.ts';
 import { lessonContent, type Language } from './lessons.ts';
 import { translator, type TextKey } from './i18n.ts';
 import { blochSvg, lineChart } from './plots.ts';
+import { getBoxMode, selectBoxExperiment, renderBox, handleBoxClick, handleBoxInput, handleBoxChange, refreshBoxInputs, captureBoxDetails, boxSnapshot, boxExportSetup, boxExportData, boxFigureMetadata, type BoxMode } from './box-ui.ts';
+import { dataCsv, downloadText, figureSvg, type DataExport } from './exports.ts';
 
 type Mode = 'state' | 'time' | 'family';
 type Tool = 'bloch' | 'density' | 'probabilities' | 'amplitudes' | 'trajectory' | 'spectrum' | 'outcomes';
 type Binding = { mode: Mode; r: Vec3 | null; time: TimeRun; family: FamilyRun; batch: BatchRun | null; operations: readonly Operation[]; timeIndex: number; familyIndex: number; branch: 'lower' | 'upper' };
 type Panel = { id: number; tool: Tool; basis: Axis; gamma: number; collapsed: boolean; pinned: Binding | null };
-type SourceInfo = { version: string; revision: string | null; sourceHash: string; sourceFile: string; snippets: Record<string, { code: string; startLine: number; endLine: number }> };
+type SourceInfo = { version: string; revision: string | null; sourceHash: string; sourceFile: string; sourceFiles?: Record<string, string>; snippets: Record<string, { code: string; startLine: number; endLine: number; sourceFile?: string; sourceHash?: string }> };
+type System = 'qubit' | 'box';
+let system: System = 'qubit';
 
 let lab = createLab();
 let mode: Mode = 'state';
@@ -28,8 +32,41 @@ let codeFragment = 'probabilities';
 let source: SourceInfo | null = null;
 let notice: TextKey | null = null;
 let noticeIsError = false;
-const openSections = new Set<string>(window.matchMedia('(max-width: 700px)').matches ? [] : ['prepare-section', 'operations-section', 'time-controls-section', 'math-section']);
-const draft = { theta: 90, phi: 0, length: 1, preset: 'plusX', rotationAxis: 'z' as Axis, rotationAngle: 90, measurementAxis: 'z' as Axis, protocol: 'z', trials: 100, seed: 123456789, hx: 0, hy: 0, hz: 0.5, end: 12, method: 'spectral' as EvolutionMethod, delta: 0.6 };
+let openSections = new Set<string>(window.matchMedia('(max-width: 700px)').matches ? [] : ['prepare-section', 'operations-section', 'time-controls-section', 'math-section']);
+let draft = { theta: 90, phi: 0, length: 1, preset: 'plusX', rotationAxis: 'z' as Axis, rotationAngle: 90, measurementAxis: 'z' as Axis, protocol: 'z', trials: 100, seed: 123456789, hx: 0, hy: 0, hz: 0.5, end: 12, method: 'spectral' as EvolutionMethod, delta: 0.6 };
+type Draft = typeof draft;
+type Origin = 'default' | 'prepared' | 'state-transfer' | 'time-transfer' | 'family-transfer';
+type Session = { lab: Lab; draft: Draft; openSections: Set<string>; codeFragment: string; origin: Origin; transfer: Record<string, unknown> | null };
+const sessions: Record<Mode, Session> = {
+  state: { lab, draft, openSections, codeFragment, origin: 'default', transfer: null },
+  time: { lab: createLab(), draft: { ...draft }, openSections: new Set(openSections), codeFragment: 'spectral', origin: 'default', transfer: null },
+  family: { lab: createLab(), draft: { ...draft }, openSections: new Set(openSections), codeFragment: 'spectrum', origin: 'default', transfer: null },
+};
+let renderedContext = '';
+const words = (mn: string, en: string): string => lang === 'mn' ? mn : en;
+function captureDetails(): void {
+  if (system === 'box') { captureBoxDetails(app); return; }
+  for (const d of app.querySelectorAll<HTMLDetailsElement>('details[id]')) d.open ? openSections.add(d.id) : openSections.delete(d.id);
+}
+function saveSession(): void {
+  Object.assign(sessions[mode], { lab, draft, openSections, codeFragment });
+}
+function selectMode(next: Mode): void {
+  captureDetails(); saveSession(); mode = next;
+  ({ lab, draft, openSections, codeFragment } = sessions[mode]);
+  notice = null;
+}
+function selectSystem(next: System): void {
+  captureDetails(); saveSession(); system = next; notice = null;
+}
+function adoptState(r: Vec3, origin: Origin, transfer: Record<string, unknown>): void {
+  const length = Math.min(1, norm(r));
+  const theta = length ? Math.acos(Math.max(-1, Math.min(1, r[2] / length))) * 180 / Math.PI : 0;
+  const phi = (Math.atan2(r[1], r[0]) * 180 / Math.PI + 360) % 360;
+  Object.assign(draft, { theta, phi, length, preset: 'custom' });
+  lab = prepareState(lab, theta, phi, length);
+  sessions[mode].origin = origin; sessions[mode].transfer = transfer;
+}
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const esc = (value: unknown): string => String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const fmt = (x: number, places = 3): string => (Math.abs(x) < 0.5 * 10 ** -places ? 0 : x).toFixed(places);
@@ -59,28 +96,28 @@ function binding(): Binding {
   return { mode, r, time: lab.time, family: lab.family, batch: lab.batch, operations: lab.operations, timeIndex, familyIndex, branch };
 }
 function bindingLabel(b: Binding): string {
-  if (b.mode === 'state') return t('current');
-  if (b.mode === 'time') return `t = ${fmt(timePoint(b.time, b.timeIndex).t, 2)} · ${t('result')} ${b.time.id}`;
-  return `λ = ${fmt(b.family.points[b.familyIndex].lambda, 2)} · E${b.branch === 'lower' ? '−' : '+'} · ${t('result')} ${b.family.id}`;
+  if (b.mode === 'state') return `${t('current')} · ${words('үйлдэл', 'operation')} ${b.operations.at(-1)?.index ?? 0}`;
+  if (b.mode === 'time') return `${words('Хугацааны үр дүн', 'Time result')} ${b.time.id} · t = ${fmt(timePoint(b.time, b.timeIndex).t, 3)} · r₀ = ${vectorText(b.time.initial)} · h = ${vectorText(b.time.h)} · ${t(b.time.method === 'spectral' ? 'spectral' : 'blochMethod')}`;
+  return `${words('Параметрийн үр дүн', 'Family result')} ${b.family.id} · λ = ${fmt(b.family.points[b.familyIndex].lambda, 2)} · E${b.branch === 'lower' ? '−' : '+'} ${words('салбар', 'branch')} · Δ = ${fmt(b.family.delta)}`;
 }
-function eligibleTools(): Tool[] {
+function eligibleTools(b: Binding = binding()): Tool[] {
   const common: Tool[] = ['bloch', 'density', 'probabilities'];
-  const r = binding().r;
+  const r = b.r;
   if (r && Math.abs(norm(r) - 1) < 1e-12) common.push('amplitudes');
-  if (mode === 'time') common.unshift('trajectory');
-  if (mode === 'family') common.unshift('spectrum');
-  if (mode === 'state') common.push('outcomes');
+  if (b.mode === 'time') common.unshift('trajectory');
+  if (b.mode === 'family') common.unshift('spectrum');
+  if (b.mode === 'state') common.push('outcomes');
   return common;
 }
 function preparationControls(): string {
   const choices: TextKey[] = ['plusZ', 'minusZ', 'plusX', 'minusX', 'plusY', 'mixed'];
-  return detail('prepare-section', `<span class="section-number">01</span>${t('preparation')}`, `<form id="prepare-form"><label class="field-label" for="preset">${t('preset')}</label><select id="preset" data-draft="preset">${choices.map(key => option(key, t(key), draft.preset)).join('')}${option('custom', t('custom'), draft.preset)}</select>${range('theta', t('polar'), 0, 180, 1, '°')}${range('phi', t('azimuth'), 0, 360, 1, '°')}${range('length', t('length'), 0, 1, 0.01, '')}<p class="help">${t('lengthHelp')}</p>${button('prepare', t('prepare'), 'primary full', 'id="prepare-button"')}${button('reprepare', t('reset'), 'text-button full', `title="${t('resetHelp')}"`)}</form>`, 'control-section');
+  return detail('prepare-section', `<span class="section-number">01</span>${t('preparation')}`, `<form id="prepare-form"><p class="help preparation-draft-label">${t('draft')} · ${words('Бэлтгэх товчоор хэрэгжүүлнэ.', 'Apply with Prepare state.')}</p><label class="field-label" for="preset">${t('preset')}</label><select id="preset" data-draft="preset">${choices.map(key => option(key, t(key), draft.preset)).join('')}${option('custom', t('custom'), draft.preset)}</select>${range('theta', t('polar'), 0, 180, 1, '°')}${range('phi', t('azimuth'), 0, 360, 1, '°')}${range('length', t('length'), 0, 1, 0.01, '')}<p class="help">${t('lengthHelp')}</p>${button('prepare', t('prepare'), 'primary full', 'id="prepare-button"')}${button('reprepare', t('reset'), 'text-button full', `title="${t('resetHelp')}"`)}</form>`, 'control-section');
 }
 function stateControls(): string {
   return `${preparationControls()}<details id="operations-section" class="control-section" ${openSections.has('operations-section') ? 'open' : ''}><summary><span class="section-number">02</span>${t('operations')}<span class="chevron" aria-hidden="true">⌄</span></summary><form id="operation-form"><label class="field-label">${t('rotation')}</label><div class="input-row"><label class="small-select" for="rotation-axis">${t('axis')}<select id="rotation-axis" data-draft="rotationAxis">${axes(draft.rotationAxis)}</select></label>${numberField('rotationAngle', `${t('angle')} °`, draft.rotationAngle, -360, 360, 1)}</div>${button('rotate', t('rotate'), 'secondary full')}<div class="rule"></div><label class="field-label" for="measurement-axis">${t('measurement')}</label><div class="button-row"><select id="measurement-axis" aria-label="${t('axis')}" data-draft="measurementAxis">${axes(draft.measurementAxis)}</select>${button('measure', t('measure'), 'primary', 'id="measure-button"')}</div><p class="help">${t('measureHelp')}</p></form></details>${detail('sampling-section', `<span class="section-number">03</span>${t('repetitions')}`, `<form id="sampling-form"><label class="field-label" for="protocol">${t('protocol')}</label><select id="protocol" data-draft="protocol">${['x', 'y', 'z', 'zz', 'zxz'].map(v => option(v, v.split('').join(' → '), draft.protocol)).join('')}</select><div class="input-row">${numberField('trials', t('copies'), draft.trials, 1, 2000, 1)}</div>${button('sample', t('sample'), 'primary full', 'id="sample-button"')}<p class="help">${t('samplingHelp')}</p><div class="rule"></div>${numberField('seed', t('seed'), draft.seed, 0, 4294967295, 1)}${button('seed', t('resetSeed'), 'text-button full')}<p class="help">${t('seeded')}</p></form>`, 'control-section')}`;
 }
 function timeControls(): string {
-  return `<details id="time-controls-section" class="control-section" ${openSections.has('time-controls-section') ? 'open' : ''}><summary><span class="section-number">01</span>${t('timeSetup')}<span class="chevron" aria-hidden="true">⌄</span></summary><p class="formula control-formula">H = h · σ</p><form id="time-form"><div class="triple-input">${numberField('hx', 'hₓ', draft.hx, -5, 5, 0.1)}${numberField('hy', 'hᵧ', draft.hy, -5, 5, 0.1)}${numberField('hz', 'h_z', draft.hz, -5, 5, 0.1)}</div>${numberField('end', t('duration'), draft.end, 0.1, 100, 0.1)}<label class="field-label" for="evolution-method">${t('method')}</label><select id="evolution-method" data-draft="method">${option('spectral', t('spectral'), draft.method)}${option('bloch', t('blochMethod'), draft.method)}</select><p class="help">${t('hHelp')}</p><div class="input-state"><span>${t('current')}</span><code>${vectorText(lab.current)}</code></div>${button('calculate-time', t('calculate'), 'primary full', 'id="calculate-time"')}<p class="help">${t('refreshHelp')}</p></form></details>${preparationControls()}`;
+  return `<details id="time-controls-section" class="control-section" ${openSections.has('time-controls-section') ? 'open' : ''}><summary><span class="section-number">01</span>${t('timeSetup')}<span class="chevron" aria-hidden="true">⌄</span></summary><p class="formula control-formula">H = h · σ</p><form id="time-form"><div class="triple-input">${numberField('hx', 'hₓ', draft.hx, -5, 5, 0.1)}${numberField('hy', 'hᵧ', draft.hy, -5, 5, 0.1)}${numberField('hz', 'h_z', draft.hz, -5, 5, 0.1)}</div>${numberField('end', t('duration'), draft.end, 0.1, 100, 'any')}<label class="field-label" for="evolution-method">${t('method')}</label><select id="evolution-method" data-draft="method">${option('spectral', t('spectral'), draft.method)}${option('bloch', t('blochMethod'), draft.method)}</select><p class="help">${t('hHelp')}</p><div class="input-state"><span>${words('Дараагийн тооцооны эхний төлөв', 'Initial state for next calculation')}</span><code>${vectorText(lab.current)}</code></div>${button('calculate-time', t('calculate'), 'primary full', 'id="calculate-time"')}<p class="help">${t('refreshHelp')}</p></form></details>${preparationControls()}`;
 }
 function familyControls(): string {
   return `<section class="control-section"><h3><span class="section-number">01</span>${t('familySetup')}</h3><p class="formula control-formula">H(λ) = Δσₓ + λσ_z</p><form id="family-form">${numberField('delta', t('coupling'), draft.delta, 0, 3, 0.05)}${button('calculate-family', t('calculateFamily'), 'primary full', 'id="calculate-family"')}<p class="help">${t('familyHelp')}</p></form><div class="rule"></div><label class="field-label" for="branch">${t('branch')}</label><select id="branch" data-view="branch">${option('lower', t('lower'), branch)}${option('upper', t('upper'), branch)}</select></section><div class="quiet-note"><span class="note-mark">λ</span><p>${t('familyDescription')}</p></div>`;
@@ -150,34 +187,66 @@ function panelBody(p: Panel): string {
   return amplitudePanel(r, p);
 }
 function panelHtml(p: Panel, index: number): string {
-  const types = eligibleTools();
+  const types = eligibleTools(p.pinned ?? binding());
   if (!types.includes(p.tool)) types.push(p.tool);
   return `<article class="panel ${index === 0 ? 'featured' : ''} ${p.collapsed ? 'is-collapsed' : ''}" data-panel="${p.id}" data-tool="${p.tool}"><header class="panel-header"><div class="panel-heading"><span class="panel-number">${String(index + 1).padStart(2, '0')}</span><label class="sr-only" for="tool-${p.id}">${t('instruction')}</label><select id="tool-${p.id}" class="tool-select" data-panel-tool="${p.id}">${types.map(type => option(type, t(type), p.tool)).join('')}</select></div><div class="panel-actions">${button('pin-panel', p.pinned ? '●' : '○', p.pinned ? 'icon-button active' : 'icon-button', `data-id="${p.id}" title="${t(p.pinned ? 'unpin' : 'pin')}" aria-label="${t(p.pinned ? 'unpin' : 'pin')}" aria-pressed="${!!p.pinned}"`)}${index ? button('feature-panel', '↖', 'icon-button', `data-id="${p.id}" title="${t('feature')}" aria-label="${t('feature')}"`) : ''}${button('collapse-panel', p.collapsed ? '+' : '−', 'icon-button', `data-id="${p.id}" title="${t(p.collapsed ? 'expand' : 'collapse')}" aria-label="${t(p.collapsed ? 'expand' : 'collapse')}" aria-expanded="${!p.collapsed}"`)}${button('remove-panel', '×', 'icon-button', `data-id="${p.id}" title="${t('remove')}" aria-label="${t('remove')}" ${panels[mode].length === 1 ? 'disabled' : ''}`)}</div></header><div class="panel-binding">${p.pinned ? `<span class="pin-label">${t('pinned')}</span>` : ''}${bindingLabel(p.pinned ?? binding())}</div><div class="panel-body" ${p.collapsed ? 'hidden' : ''}>${panelBody(p)}</div></article>`;
 }
+function sourceDisclosure(id: string, title: string): string {
+  const snippet = source?.snippets[id];
+  const file = snippet?.sourceFile ?? (id.startsWith('box-') ? 'src/box.ts' : 'src/quantum.ts');
+  const ref = source?.revision ?? 'main';
+  const url = `https://github.com/gantemur/quantum/blob/${ref}/${file}${snippet ? `#L${snippet.startLine}-L${snippet.endLine}` : ''}`;
+  return `${title ? `<h4>${esc(title)}</h4>` : ''}${snippet ? `<pre tabindex="0"><code>${esc(snippet.code)}</code></pre><div class="source-meta"><a href="${url}" target="_blank" rel="noreferrer">${t('source')} · ${file} ↗</a><span>${source?.revision ? source.revision.slice(0, 12) : t('localBuild')}</span></div><details class="hash-detail"><summary>${t('sourceHash')}</summary><code>${snippet.sourceHash ?? source?.sourceHash}</code></details>` : `<p>${t('unavailableCode')}</p><a href="${url}" target="_blank" rel="noreferrer">${t('source')} ↗</a>`}`;
+}
 function codeSection(): string {
   const fragments = { probabilities: 'probabilityCode', rotate: 'rotationCode', spectral: 'spectralCode', spectrum: 'spectrumCode', measure: 'measureCode' } as const;
-  const snippet = source?.snippets[codeFragment];
-  const ref = source?.revision ?? 'main';
-  const url = `https://github.com/gantemur/quantum/blob/${ref}/src/quantum.ts${snippet ? `#L${snippet.startLine}-L${snippet.endLine}` : ''}`;
-  return `<div id="method-code"><h4>${t('codeTitle')}</h4><p>${t('codeHelp')}</p><label class="field-label" for="code-fragment">${t('fragment')}</label><select id="code-fragment" data-view="codeFragment">${Object.entries(fragments).map(([id, key]) => option(id, t(key), codeFragment)).join('')}</select>${snippet ? `<pre tabindex="0"><code>${esc(snippet.code)}</code></pre><div class="source-meta"><a href="${url}" target="_blank" rel="noreferrer">${t('source')} ↗</a><span>${source?.revision ? source.revision.slice(0, 12) : t('localBuild')}</span></div><details class="hash-detail"><summary>${t('sourceHash')}</summary><code>${source?.sourceHash}</code></details>` : `<p>${t('unavailableCode')}</p><a href="${url}" target="_blank" rel="noreferrer">${t('source')} ↗</a>`}</div>`;
+  return `<div id="method-code"><h4>${t('codeTitle')}</h4><p>${t('codeHelp')}</p><label class="field-label" for="code-fragment">${t('fragment')}</label><select id="code-fragment" data-view="codeFragment">${Object.entries(fragments).map(([id, key]) => option(id, t(key), codeFragment)).join('')}</select>${sourceDisclosure(codeFragment, '')}</div>`;
 }
 function learning(): string {
-  const content = lessonContent(lang);
-  return `<section class="learning" id="learning"><div class="section-title"><div><span class="eyebrow">${t('qubit')} / 01</span><h2>${t('learning')}</h2><p>${t('learningIntro')}</p></div><span class="learning-mark" aria-hidden="true">ψ</span></div><div class="learning-grid"><div>${detail('math-section', content.mathTitle, `<div class="lesson-body">${content.mathHtml}</div>`, 'lesson')}${detail('method-section', content.methodTitle, `<div class="lesson-body">${content.methodHtml}${codeSection()}</div>`, 'lesson')}${detail('glossary-section', content.glossaryTitle, `<div class="lesson-body">${content.glossaryHtml}</div>`, 'lesson')}</div><div>${detail('exercises-section', content.exercisesTitle, `<div class="lesson-body exercises">${content.exercises.map(ex => `<article class="exercise" id="${ex.id}"><span class="exercise-id">${ex.id}</span><h4>${ex.title}</h4><p>${ex.question}</p><ol>${ex.steps.map(s => `<li>${s}</li>`).join('')}</ol>${button('exercise', t('loadPreset'), 'secondary', `data-preset="${ex.preset}"`)}${detail(`hint-${ex.id}`, t('hint'), `<p>${ex.hint}</p>`, 'hint')}<p class="exercise-check"><strong>${t('check')}.</strong> ${ex.check}</p></article>`).join('')}</div>`, 'lesson')}${detail('project-section', content.projectsTitle, `<div class="lesson-body"><h4>${content.project.title}</h4><p>${content.project.question}</p><ol>${content.project.steps.map(s => `<li>${s}</li>`).join('')}</ol><p class="exercise-check">${content.project.check}</p></div>`, 'lesson')}</div></div></section>`;
+  const content = lessonContent(lang, mode);
+  return `<section class="learning" id="learning"><div class="section-title"><div><span class="eyebrow">${t('qubit')} / ${experimentLabel()}</span><h2>${t('learning')}</h2><p>${t('learningIntro')}</p></div><span class="learning-mark" aria-hidden="true">ψ</span></div><div class="learning-grid"><div>${detail('math-section', content.mathTitle, `<div class="lesson-body">${content.mathHtml}</div>`, 'lesson')}${detail('method-section', content.methodTitle, `<div class="lesson-body">${content.methodHtml}${codeSection()}</div>`, 'lesson')}${detail('glossary-section', content.glossaryTitle, `<div class="lesson-body">${content.glossaryHtml}</div>`, 'lesson')}</div><div>${detail('exercises-section', content.exercisesTitle, `<div class="lesson-body exercises">${content.exercises.map(ex => `<article class="exercise" id="${ex.id}"><span class="exercise-id">${ex.id}</span><h4>${ex.title}</h4><p>${ex.question}</p><ol>${ex.steps.map(s => `<li>${s}</li>`).join('')}</ol>${button('exercise', t('loadPreset'), 'secondary', `data-preset="${ex.preset}"`)}${detail(`hint-${ex.id}`, t('hint'), `<p>${ex.hint}</p>`, 'hint')}<p class="exercise-check"><strong>${t('check')}.</strong> ${ex.check}</p></article>`).join('')}</div>`, 'lesson')}${detail('project-section', content.projectsTitle, `<div class="lesson-body"><h4>${content.project.title}</h4><p>${content.project.question}</p><ol>${content.project.steps.map(s => `<li>${s}</li>`).join('')}</ol><p class="exercise-check">${content.project.check}</p></div>`, 'lesson')}</div></div></section>`;
 }
-function render(): void {
-  const active = document.activeElement as HTMLInputElement | null;
-  const activeId = active?.id;
-  for (const d of app.querySelectorAll<HTMLDetailsElement>('details[id]')) d.open ? openSections.add(d.id) : openSections.delete(d.id);
-  t = translator(lang);
-  document.documentElement.lang = lang;
-  document.title = `${t('brand')} · ${t('qubit')}`;
-  const modeLabel: Record<Mode, TextKey> = { state: 'stateMode', time: 'timeMode', family: 'familyMode' };
-  app.innerHTML = `<header class="topbar"><a class="brand" href="./"><img src="./icon.svg" width="38" height="38" alt=""><span>${t('brand')}<small>${t('subtitle')}</small></span></a><div class="topbar-right"><span class="course-label">${t('finite')}</span><div class="language-switch" aria-label="Language / Хэл">${button('language', 'MN', lang === 'mn' ? 'selected' : '', 'data-lang="mn" aria-label="Монгол"')}${button('language', 'EN', lang === 'en' ? 'selected' : '', 'data-lang="en" aria-label="English"')}</div></div></header><main><section class="hero"><div><span class="eyebrow"><span class="tiny-line"></span>01 / ${t('qubit')}</span><h1>${t('title')}</h1><p>${t('intro')}</p></div><div class="hero-equation" aria-hidden="true">ρ = <span class="fraction"><span>I + r · σ</span><span>2</span></span></div></section><nav class="experiment-tabs" aria-label="${t('experiment')}">${(['state', 'time', 'family'] as Mode[]).map((m, i) => button('mode', `<span class="tab-index">0${i + 1}</span>${t(modeLabel[m])}`, mode === m ? 'selected' : '', `data-mode="${m}" aria-pressed="${mode === m}"`)).join('')}</nav><div class="experiment-description"><p>${t(mode === 'state' ? 'stateDescription' : mode === 'time' ? 'timeDescription' : 'familyDescription')}</p><span class="unit-label">ℏ = 1</span></div><div class="lab-layout"><aside class="controls" aria-label="${t('experiment')}">${mode === 'state' ? stateControls() : mode === 'time' ? timeControls() : familyControls()}</aside><section class="workspace" id="workspace" tabindex="-1"><div class="workspace-top"><div><span class="eyebrow">${t('method')}</span><button id="method-link" class="method-link" data-action="show-method">${methodLabel()} <span aria-hidden="true">↗</span></button></div><div class="workspace-actions">${button('show-method', '&lt;/&gt;', 'code-button', `aria-label="${t('openMethod')}" title="${t('openMethod')}"`)}${button('add-panel', `+ ${t('addPanel')}`, 'secondary', panels[mode].length >= 4 ? `disabled title="${t('panelLimit')}"` : '')}</div></div>${coordinateControls()}<div id="notice" class="notice ${noticeIsError ? 'error' : ''}" role="status" aria-live="polite">${notice ? t(notice) : ''}</div><div class="panel-deck" id="panel-deck">${panels[mode].map(panelHtml).join('')}</div><div class="workspace-bottom"><span class="status-dot"></span>${t('methodHelp')}</div></section></div>${learning()}</main><footer><span>${t('footer')}</span><a href="https://github.com/gantemur/quantum" target="_blank" rel="noreferrer">${t('footerSource')} ↗</a></footer>`;
-  if (activeId) {
-    const restore = document.getElementById(activeId) ?? document.querySelector<HTMLElement>('.panel .tool-select');
-    restore?.focus({ preventScroll: true });
-  }
+function experimentLabel(): string {
+  if (system === 'box') return getBoxMode() === 'state' ? words('Төлөв бүтээх ба энерги хэмжих', 'State construction & energy measurement') : words('Хугацааны хувьсал', 'Time evolution');
+  return words({ state: 'Төлөв бэлтгэх ба хэмжих', time: 'Тогтмол H: хугацааны хувьсал', family: 'H(λ): параметрийн бүл', }[mode], { state: 'State preparation & measurement', time: 'Time evolution at fixed H', family: 'Hamiltonian parameter family' }[mode]);
+}
+function navigation(): string {
+  const experiments = system === 'qubit' ? [
+    ['state', words('Төлөв бэлтгэх ба хэмжих', 'State preparation & measurement')],
+    ['time', words('Тогтмол H: хугацааны хувьсал', 'Time evolution at fixed H')],
+    ['family', words('H(λ): параметрийн бүл', 'Hamiltonian parameter family')],
+  ] : [
+    ['state', words('Төлөв бүтээх ба энерги хэмжих', 'State construction & energy measurement')],
+    ['time', words('Хугацааны хувьсал', 'Time evolution')],
+  ];
+  const question = system === 'box' ? (getBoxMode() === 'state'
+    ? words('Комплекс коэффициентүүд байрлалын нягт ба энергийн магадлалыг хэрхэн тодорхойлох вэ?', 'How do complex coefficients determine position density and energy probabilities?')
+    : words('Тогтмол энергийн магадлалтай үед интерференц ба байрлалын дундаж хэрхэн өөрчлөгдөх вэ?', 'How do interference and mean position evolve while energy probabilities stay fixed?'))
+    : words({ state: 'Бэлтгэл, эргэлт, хэмжилт төлөв болон дараагийн үр дүнг хэрхэн өөрчлөх вэ?', time: 'Өгөгдсөн эхний төлөв тогтмол Гамильтонианы дор хэрхэн хувьсах вэ?', family: 'Гамильтониан өөрчлөгдөхөд энерги ба хувийн төлөвүүд хэрхэн өөрчлөгдөх вэ?' }[mode], { state: 'How do preparation, rotation, and measurement change the state and later outcomes?', time: 'How does a chosen initial state evolve under a fixed Hamiltonian?', family: 'How do energies and eigenstates change across a family of Hamiltonians?' }[mode]);
+  return `<section class="experiment-navigation" aria-label="${words('Систем ба туршилт', 'System and experiment')}"><div class="context-selectors"><label for="system-select"><span class="eyebrow">${words('Систем', 'System')}</span><select id="system-select">${option('qubit', words('Кубит · хоёр төлөвт систем', 'Qubit · two-level system'), system)}${option('box', words('Хязгааргүй 1D хайрцаг', 'Infinite 1D box'), system)}</select></label><span class="context-arrow" aria-hidden="true">›</span><label for="experiment-select"><span class="eyebrow">${words('Туршилт', 'Experiment')}</span><select id="experiment-select">${experiments.map(([value, label]) => option(value, label, system === 'qubit' ? mode : getBoxMode())).join('')}</select></label><span class="unit-label">ℏ = 1</span></div><h1>${experimentLabel()}</h1><p class="experiment-question">${question}</p><p class="navigation-help">${words('Туршилт солиход тохиргоо, үр дүн, самбарууд хадгалагдана. Төлөв дамжуулахдаа тусгай товчийг ашиглана.', 'Switching experiments preserves settings, results, and panels. Use an explicit transfer to carry a state into another experiment.')}</p></section>`;
+}
+function resultStatus(): string {
+  let dirty = false;
+  if (mode === 'time') dirty = lab.current.some((x, i) => Math.abs(x - lab.time.initial[i]) > 1e-12) || [draft.hx, draft.hy, draft.hz].some((x, i) => x !== lab.time.h[i]) || draft.end !== lab.time.end || draft.method !== lab.time.method;
+  if (mode === 'family') dirty = draft.delta !== lab.family.delta;
+  const origin = { default: words('Анхны бэлтгэл', 'Default preparation'), prepared: words('Энэ туршилтад бэлтгэсэн', 'Prepared in this experiment'), 'state-transfer': words('Төлөв бэлтгэх туршилтаас хуулсан', 'Copied from state preparation'), 'time-transfer': words('Сонгосон хугацааны төлөвөөс хуулсан', 'Copied from selected time state'), 'family-transfer': words('Сонгосон хувийн төлөв ба H-оос хуулсан', 'Copied from selected eigenstate and H') }[sessions[mode].origin];
+  const transfer = mode === 'state' ? button('transfer-to-time', words('Энэ төлөвийг хувьсалд ашиглах →', 'Use this state in evolution →'), 'text-button') : mode === 'family' ? button('transfer-family-to-time', words('Сонгосон хувийн төлөв ба H-ийг ашиглах →', 'Use selected eigenstate and H →'), 'text-button', binding().r ? '' : 'disabled') : button('transfer-time-to-state', words('Сонгосон төлөвийг бэлтгэлд ашиглах →', 'Use selected state in preparation →'), 'text-button');
+  return `<div class="result-status ${dirty ? 'is-stale' : ''}" id="result-status"><span>${mode === 'state' ? origin : `${words('Харагдаж буй', 'Showing')}: ${bindingLabel(binding())} · ${methodLabel()}`}</span>${dirty ? `<strong>${words('Оролт өөрчлөгдсөн — шинэ үр дүнг тооцоолно уу.', 'Inputs changed — calculate to replace this result.')}</strong>` : ''}${mode === 'time' ? `<small>${origin}</small>` : ''}${transfer}</div>`;
+}
+function exportToolbar(): string {
+  return `<div class="export-toolbar" aria-label="${words('Экспорт', 'Export')}"><span>${words('Энэ туршилт', 'This experiment')}</span>${button('export-setup', words('Тохиргоо JSON', 'Setup JSON'), 'text-button')}${button('export-data', words('Өгөгдөл CSV', 'Data CSV'), 'text-button')}${button('export-figure', words('Зураг SVG', 'Figure SVG'), 'text-button')}<small>${words('JSON нь тохиргооны бүртгэл. CSV нь одоогийн үр дүн; SVG нь эхний нээлттэй график.', 'JSON records setup. CSV contains the current result; SVG contains the first expanded graph.')}</small></div>`;
+}
+function render(capture = true): void {
+  const activeId = (document.activeElement as HTMLElement | null)?.id;
+  const context = `${system}:${system === 'qubit' ? mode : getBoxMode()}`;
+  if (capture && renderedContext === context) captureDetails();
+  t = translator(lang); document.documentElement.lang = lang;
+  document.querySelector<HTMLAnchorElement>('.skip')?.setAttribute('href', system === 'box' ? '#box-workspace' : '#workspace');
+  document.title = `${t('brand')} · ${experimentLabel()}`;
+  const body = system === 'box' ? renderBox(lang, sourceDisclosure) : `<div class="lab-layout"><aside class="controls" aria-label="${t('experiment')}">${mode === 'state' ? stateControls() : mode === 'time' ? timeControls() : familyControls()}</aside><section class="workspace" id="workspace" tabindex="-1"><div class="workspace-top"><div><span class="eyebrow">${t('method')}</span><button id="method-link" class="method-link" data-action="show-method">${methodLabel()} <span aria-hidden="true">↗</span></button></div><div class="workspace-actions">${button('show-method', '&lt;/&gt;', 'code-button', `aria-label="${t('openMethod')}" title="${t('openMethod')}"`)}${button('add-panel', `+ ${t('addPanel')}`, 'secondary', panels[mode].length >= 4 ? `disabled title="${t('panelLimit')}"` : '')}</div></div>${resultStatus()}${coordinateControls()}<div id="notice" class="notice ${noticeIsError ? 'error' : ''}" role="status" aria-live="polite">${notice ? t(notice) : ''}</div><div class="panel-deck" id="panel-deck">${panels[mode].map(panelHtml).join('')}</div><div class="workspace-bottom"><span class="status-dot"></span>${t('methodHelp')}</div></section></div>${learning()}`;
+  app.innerHTML = `<header class="topbar"><a class="brand" href="./"><img src="./icon.svg" width="38" height="38" alt=""><span>${t('brand')}<small>${t('subtitle')}</small></span></a><div class="topbar-right"><div class="language-switch" aria-label="Language / Хэл">${button('language', 'MN', lang === 'mn' ? 'selected' : '', 'data-lang="mn" aria-label="Монгол"')}${button('language', 'EN', lang === 'en' ? 'selected' : '', 'data-lang="en" aria-label="English"')}</div></div></header><main>${navigation()}${exportToolbar()}${body}</main><footer><span>${t('footer')}</span><a href="https://github.com/gantemur/quantum" target="_blank" rel="noreferrer">${t('footerSource')} ↗</a></footer>`;
+  renderedContext = context;
+  if (activeId) (document.getElementById(activeId) ?? document.querySelector<HTMLElement>('.panel .tool-select'))?.focus({ preventScroll: true });
 }
 function updatePanels(): void {
   const deck = document.querySelector('#panel-deck');
@@ -201,19 +270,57 @@ function setCoordinate(index: number): void {
   const label = document.querySelector('#coordinate-output');
   if (label) label.textContent = mode === 'time' ? `t = ${fmt(timePoint(lab.time, i).t, 2)}` : `λ = ${fmt(lab.family.points[i].lambda, 2)}`;
   updatePanels();
+  const status = document.querySelector('#result-status'); if (status) status.outerHTML = resultStatus();
+}
+
+function qubitData(b: Binding = binding()): DataExport {
+  const metadata: Record<string, unknown> = { system: 'qubit', experiment: b.mode, hbar: 1, source: source?.revision ?? null, sourceFiles: source?.sourceFiles, binding: bindingLabel(b) };
+  if (b.mode === 'time') return { metadata: { ...metadata, resultId: b.time.id, initial: b.time.initial, h: b.time.h, end: b.time.end, method: b.time.method, coordinate: 'physical time' }, columns: ['t', 'rx', 'ry', 'rz', 'mean_energy'], rows: b.time.points.map(p => [p.t, ...p.r, dot(b.time.h, p.r)]) };
+  if (b.mode === 'family') return { metadata: { ...metadata, resultId: b.family.id, delta: b.family.delta, coordinate: 'Hamiltonian parameter lambda; not physical time', method: 'analytic 2x2 eigensystem' }, columns: ['lambda', 'energy_lower', 'energy_upper', 'lower_rx', 'lower_ry', 'lower_rz', 'upper_rx', 'upper_ry', 'upper_rz'], rows: b.family.points.map(p => [p.lambda, ...p.data.energies, ...(p.data.lower ?? [null, null, null]), ...(p.data.upper ?? [null, null, null])]) };
+  return { metadata: { ...metadata, current: b.r, operations: b.operations, batch: b.batch, method: 'Bloch density matrix and Born rule' }, columns: ['rx', 'ry', 'rz', 'purity', 'p_plus_x', 'p_plus_y', 'p_plus_z'], rows: b.r ? [[...b.r, purity(b.r), ...(['x', 'y', 'z'] as Axis[]).map(a => probabilities(b.r!, axisVector(a)).plus)]] : [] };
+}
+function exportCurrent(kind: string): void {
+  saveSession();
+  const experiment = system === 'qubit' ? mode : getBoxMode();
+  const name = `quantum-${system}-${experiment}`;
+  const provenance = { version: source?.version ?? '0.2.0', sourceRevision: source?.revision ?? null, numericalSourceHashes: source?.sourceFiles ?? null };
+  if (kind === 'export-setup') {
+    const setup = { kind: 'quantum-lab-setup', schemaVersion: 1, scope: 'active experiment; setup record, not full session restoration', system, experiment, provenance, setup: system === 'box' ? boxExportSetup() : { prepared: lab.prepared, current: lab.current, draft, initialStateOrigin: sessions[mode].origin, transferSource: sessions[mode].transfer, seed: lab.seed, actualResult: mode === 'time' ? { id: lab.time.id, initial: lab.time.initial, h: lab.time.h, end: lab.time.end, method: lab.time.method } : mode === 'family' ? { id: lab.family.id, delta: lab.family.delta } : { operationCount: lab.operationCount }, cursor: mode === 'time' ? { index: timeIndex, t: timePoint(lab.time, timeIndex).t } : mode === 'family' ? { index: familyIndex, lambda: lab.family.points[familyIndex].lambda, branch } : null, panels: panels[mode].map(p => ({ id: p.id, tool: p.tool, basis: p.basis, gamma: p.gamma, collapsed: p.collapsed, pinned: p.pinned ? { label: bindingLabel(p.pinned), state: p.pinned.r, mode: p.pinned.mode, result: p.pinned.mode === 'time' ? { id: p.pinned.time.id, initial: p.pinned.time.initial, h: p.pinned.time.h, end: p.pinned.time.end, method: p.pinned.time.method, t: timePoint(p.pinned.time, p.pinned.timeIndex).t } : p.pinned.mode === 'family' ? { id: p.pinned.family.id, delta: p.pinned.family.delta, lambda: p.pinned.family.points[p.pinned.familyIndex].lambda, branch: p.pinned.branch } : { operations: p.pinned.operations, batch: p.pinned.batch } } : null })) } };
+    downloadText(`${name}-setup.json`, JSON.stringify(setup, null, 2) + '\n', 'application/json');
+  } else if (kind === 'export-data') {
+    const data = system === 'box' ? boxExportData() : qubitData();
+    data.metadata = { ...data.metadata, provenance };
+    downloadText(`${name}-data.csv`, dataCsv(data), 'text/csv;charset=utf-8');
+  } else {
+    const svg = app.querySelector<SVGSVGElement>('.panel:not(.is-collapsed) .panel-body svg');
+    if (!svg) return;
+    const element = svg.closest<HTMLElement>('[data-panel]')!;
+    const select = element.querySelector<HTMLSelectElement>('.tool-select');
+    const title = `${system === 'box' ? words('1D хайрцаг', '1D box') : t('qubit')} · ${select?.selectedOptions[0]?.textContent ?? experimentLabel()}`;
+    const caption = `${element.querySelector<HTMLElement>('.panel-binding')?.innerText?.replace(/\s+/g, ' ').trim() ?? ''} · ℏ = 1 · ${source?.revision?.slice(0, 12) ?? 'local'}`;
+    const p = panels[mode].find(p => p.id === Number(element.dataset.panel));
+    const bound = p?.pinned ?? binding();
+    const metadata = system === 'box' ? boxFigureMetadata(element.dataset.panel!) : { ...qubitData(bound).metadata, state: bound.r, cursor: bound.mode === 'time' ? timePoint(bound.time, bound.timeIndex).t : bound.mode === 'family' ? bound.family.points[bound.familyIndex].lambda : null, branch: bound.branch, panel: p ? { tool: p.tool, basis: p.basis, gamma: p.gamma, pinned: !!p.pinned } : null };
+    downloadText(`${name}-figure.svg`, figureSvg(svg, title, caption, { ...metadata, provenance }), 'image/svg+xml');
+  }
 }
 
 app.addEventListener('click', event => {
   const target = (event.target as Element).closest<HTMLButtonElement>('button[data-action]');
   if (!target || target.disabled) return;
   const action = target.dataset.action, id = Number(target.dataset.id);
+  if (action?.startsWith('export-')) { exportCurrent(action); return; }
+  if (system === 'box' && action !== 'language') { captureBoxDetails(app); if (handleBoxClick(target)) render(false); return; }
   const p = panels[mode].find(x => x.id === id);
   const form = target.closest('form');
   if (form && !form.reportValidity()) return;
   try {
     if (action === 'language') { lang = target.dataset.lang as Language; try { localStorage.setItem('quantum-language', lang); } catch { /* Optional preference. */ } }
-    else if (action === 'mode') { mode = target.dataset.mode as Mode; notice = null; }
-    else if (action === 'prepare') { lab = prepareState(lab, draft.theta, draft.phi, draft.length); setNotice('prepared'); }
+    else if (action === 'mode') { selectMode(target.dataset.mode as Mode); }
+    else if (action === 'transfer-to-time') { const r = [...lab.current] as Vec3; const from = { experiment: 'state', operation: lab.operationCount, state: r }; selectMode('time'); adoptState(r, 'state-transfer', from); openSections.add('time-controls-section'); }
+    else if (action === 'transfer-family-to-time') { const r = binding().r; if (!r) return; const h: Vec3 = [lab.family.delta, 0, lab.family.points[familyIndex].lambda]; const from = { experiment: 'family', resultId: lab.family.id, lambda: h[2], delta: h[0], branch, state: r, h }; selectMode('time'); adoptState(r, 'family-transfer', from); [draft.hx, draft.hy, draft.hz] = h; openSections.add('time-controls-section'); }
+    else if (action === 'transfer-time-to-state') { const selected = timePoint(lab.time, timeIndex); const r = [...selected.r] as Vec3; const from = { experiment: 'time', resultId: lab.time.id, t: selected.t, initial: lab.time.initial, h: lab.time.h, method: lab.time.method, state: r }; selectMode('state'); adoptState(r, 'time-transfer', from); openSections.add('prepare-section'); }
+    else if (action === 'prepare') { lab = prepareState(lab, draft.theta, draft.phi, draft.length); sessions[mode].origin = 'prepared'; sessions[mode].transfer = null; setNotice('prepared'); }
     else if (action === 'reprepare') { lab = reprepare(lab); setNotice('prepared'); }
     else if (action === 'rotate') { lab = rotateState(lab, draft.rotationAxis, draft.rotationAngle); setNotice('rotated'); }
     else if (action === 'measure') { lab = measureState(lab, draft.measurementAxis); showRecord(); setNotice('measurementEvent'); }
@@ -237,10 +344,21 @@ app.addEventListener('click', event => {
       openSections.add('method-section');
     }
     else if (action === 'exercise') {
-      mode = 'state';
       const choice = target.dataset.preset;
+      if (choice?.startsWith('time-')) {
+        selectMode('time'); applyPreset(choice === 'time-stationary' ? 'plusZ' : 'plusX');
+        lab = prepareState(lab, draft.theta, draft.phi, draft.length); sessions.time.origin = 'prepared'; sessions.time.transfer = null;
+        Object.assign(draft, { hx: 0, hy: 0, hz: 0.5, end: 2 * Math.PI, method: 'spectral' });
+        lab = calculateTime(lab, [0, 0, 0.5], 2 * Math.PI, 'spectral'); timeIndex = 0;
+        openSections.add('time-controls-section'); render(); document.querySelector('#workspace')?.scrollIntoView({ block: 'start' }); return;
+      }
+      if (choice?.startsWith('family-')) {
+        selectMode('family'); draft.delta = choice === 'family-crossing' ? 0 : 0.6;
+        lab = calculateFamily(lab, draft.delta); familyIndex = 100; branch = 'lower'; render(); document.querySelector('#workspace')?.scrollIntoView({ block: 'start' }); return;
+      }
+      selectMode('state');
       applyPreset(choice === 'sequence' ? 'plusZ' : 'plusX');
-      lab = prepareState(lab, draft.theta, draft.phi, draft.length);
+      lab = prepareState(lab, draft.theta, draft.phi, draft.length); sessions.state.origin = 'prepared'; sessions.state.transfer = null;
       panels.state = choice === 'phase' ? [panel('bloch'), panel('amplitudes'), panel('probabilities')] : [panel('bloch'), panel('density'), panel('probabilities')];
       if (choice === 'phase' || choice === 'mixture') panels.state[2].basis = 'x';
       if (choice === 'sequence') { draft.protocol = 'zz'; openSections.add('sampling-section'); }
@@ -254,6 +372,7 @@ app.addEventListener('click', event => {
 
 app.addEventListener('input', event => {
   const input = event.target as HTMLInputElement;
+  if (system === 'box') { handleBoxInput(input); refreshBoxInputs(app, input, input.id === 'box-time' || input.id === 'box-time-value'); return; }
   if (input.id === 'coordinate') { setCoordinate(Number(input.value)); return; }
   const key = input.dataset.draft as keyof typeof draft | undefined;
   if (key && input.type !== 'select-one') {
@@ -263,22 +382,34 @@ app.addEventListener('input', event => {
       const preset = document.querySelector<HTMLSelectElement>('#preset'); if (preset) preset.value = 'custom';
       const output = document.querySelector(`[data-output="${key}"]`); if (output) output.textContent = input.value + (input.dataset.suffix ?? '');
     }
+    const status = document.querySelector('#result-status'); if (status) status.outerHTML = resultStatus();
   }
 });
 app.addEventListener('change', event => {
   const input = event.target as HTMLInputElement | HTMLSelectElement;
+  if (input.id === 'system-select') { selectSystem(input.value as System); render(); return; }
+  if (input.id === 'experiment-select') { if (system === 'qubit') selectMode(input.value as Mode); else { captureBoxDetails(app); selectBoxExperiment(input.value as BoxMode); } render(); return; }
+  if (system === 'box') {
+    if (handleBoxChange(input)) {
+      if (input.tagName === 'INPUT') refreshBoxInputs(app, input);
+      else render();
+    }
+    return;
+  }
   if (input.dataset.panelBasis) { const p = panels[mode].find(p => p.id === Number(input.dataset.panelBasis)); if (p) p.basis = input.value as Axis; render(); }
   else if (input.dataset.panelGamma) { const p = panels[mode].find(p => p.id === Number(input.dataset.panelGamma)); if (p) p.gamma = Number(input.value); render(); }
   else if (input.dataset.panelTool) { const p = panels[mode].find(p => p.id === Number(input.dataset.panelTool)); if (p) p.tool = input.value as Tool; render(); }
-  else if (input.dataset.view === 'branch') { branch = input.value as 'lower' | 'upper'; updatePanels(); }
+  else if (input.dataset.view === 'branch') { branch = input.value as 'lower' | 'upper'; render(); }
   else if (input.dataset.view === 'codeFragment') { codeFragment = input.value; render(); }
   else if (input.dataset.draft && input.tagName === 'SELECT') {
     const key = input.dataset.draft;
     (draft as unknown as Record<string, number | string>)[key] = input.value;
-    if (key === 'preset') { applyPreset(input.value); render(); }
+    if (key === 'preset') applyPreset(input.value);
+    render();
   }
 });
 app.addEventListener('click', event => {
+  if (system !== 'qubit') return;
   const chart = (event.target as Element).closest<SVGSVGElement>('svg[data-chart="line"]');
   if (!chart) return;
   const wrapper = chart.closest<HTMLElement>('[data-select-coordinate]');
@@ -292,6 +423,6 @@ app.addEventListener('click', event => {
 app.addEventListener('submit', event => event.preventDefault());
 
 // Read-only inspection supports reproducibility and presentation-invariance checks.
-Object.defineProperty(window, '__quantumLab', { value: () => JSON.parse(JSON.stringify({ lab, mode, timeIndex, familyIndex, branch, lang, panels, draft })), writable: false });
+Object.defineProperty(window, '__quantumLab', { value: () => { saveSession(); return JSON.parse(JSON.stringify({ lab, mode, system, timeIndex, familyIndex, branch, lang, panels, draft, sessions, box: boxSnapshot() })); }, writable: false });
 render();
 fetch('./source.json').then(response => { if (!response.ok) throw new Error('Source metadata'); return response.json(); }).then((data: SourceInfo) => { source = data; render(); }).catch(() => { source = null; });
