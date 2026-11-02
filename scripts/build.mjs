@@ -20,7 +20,7 @@ await cp(path.join(root, 'src/style.css'), path.join(out, 'style.css'));
 
 const snippets = {};
 const sourceFiles = {};
-for (const sourceFile of ['src/quantum.ts', 'src/box.ts']) {
+for (const sourceFile of ['src/quantum.ts', 'src/box.ts', 'src/oscillator.ts']) {
   const source = await readFile(path.join(root, sourceFile), 'utf8');
   const sourceHash = createHash('sha256').update(source).digest('hex');
   sourceFiles[sourceFile] = sourceHash;
@@ -34,7 +34,7 @@ for (const sourceFile of ['src/quantum.ts', 'src/box.ts']) {
     snippets[start[1]] = { code: lines.slice(i + 1, end).join('\n'), startLine: i + 2, endLine: end, sourceFile, sourceHash };
   }
 }
-for (const name of ['probabilities', 'spectral', 'rotate', 'spectrum', 'measure', 'box-wavefunction', 'box-evolution', 'box-energy-measurement']) {
+for (const name of ['probabilities', 'spectral', 'rotate', 'spectrum', 'measure', 'box-wavefunction', 'box-evolution', 'box-energy-measurement', 'oscillator-coherent', 'oscillator-ritz', 'oscillator-variational']) {
   if (!snippets[name]) throw new Error(`Required source excerpt missing: ${name}`);
 }
 let revision = process.env.SOURCE_REVISION || '';
@@ -45,6 +45,6 @@ if (!revision) {
   } catch { /* Source hash still identifies a local/uncommitted build precisely. */ }
 }
 if (revision && !/^[a-f0-9]{40}$/.test(revision)) throw new Error('SOURCE_REVISION must be a full commit SHA');
-const metadata = { version: '0.2.0', revision: revision || null, sourceFile: 'src/quantum.ts', sourceHash: sourceFiles['src/quantum.ts'], sourceFiles, snippets };
+const metadata = { version: '0.3.0', revision: revision || null, sourceFile: 'src/quantum.ts', sourceHash: sourceFiles['src/quantum.ts'], sourceFiles, snippets };
 await writeFile(path.join(out, 'source.json'), JSON.stringify(metadata, null, 2) + '\n');
 console.log(`Built ${out}; ${Object.keys(snippets).length} exact numerical-source excerpts; SHA-256 ${metadata.sourceHash}`);

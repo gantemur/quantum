@@ -119,12 +119,13 @@ export function oscillatorTimeRun(alpha: Complex, count: number, end: number, pa
 
 export function anharmonicHamiltonian(count: number, coupling: number): number[][] {
   if (!Number.isInteger(count) || count < 2 || count > MAX_OSC_MODES || !Number.isFinite(coupling) || coupling < 0 || coupling > 2) throw new RangeError('invalid anharmonic basis or coupling');
-  const x = positionMatrix(count, { mass: 1, omega: 1 }), x2 = multiply(x, x), x4 = multiply(x2, x2);
+  const x4 = Array.from({ length: count }, (_, i) => Array.from({ length: count }, (_, j) => i === j ? 0.75 * (2 * i * i + 2 * i + 1) : Math.abs(i - j) === 2 ? 0.5 * (2 * Math.min(i, j) + 3) * Math.sqrt((Math.min(i, j) + 1) * (Math.min(i, j) + 2)) : Math.abs(i - j) === 4 ? 0.25 * Math.sqrt((Math.min(i, j) + 1) * (Math.min(i, j) + 2) * (Math.min(i, j) + 3) * (Math.min(i, j) + 4)) : 0));
   return Array.from({ length: count }, (_, i) => Array.from({ length: count }, (_, j) => (i === j ? i + 0.5 : 0) + coupling * x4[i][j]));
 }
 
 function jacobiEigen(a0: readonly number[][]): { values: number[]; vectors: number[][] } {
-  const n = a0.length, a = a0.map(row => [...row]), v = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => i === j ? 1 : 0));
+  const n = a0.length, a = a0.map(row => [...row]);
+  const v: number[][] = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => i === j ? 1 : 0));
   for (let sweep = 0; sweep < 80 * n * n; sweep++) {
     let p = 0, q = 1, max = 0;
     for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (Math.abs(a[i][j]) > max) { max = Math.abs(a[i][j]); p = i; q = j; }
@@ -167,8 +168,14 @@ export function optimizeGaussian(coupling: number, beta0: number, step: number, 
     const energy = gaussianEnergy(beta, coupling), gradient = gaussianGradient(beta, coupling);
     points.push({ iteration: k, beta, energy, gradient });
     if (k === iterations) break;
-    const full = Math.max(0.05, Math.min(20, beta - step * gradient));
-    beta = gaussianEnergy(full, coupling) <= energy ? full : Math.max(0.05, Math.min(20, beta - 0.25 * step * gradient));
+    let trialStep = step;
+    let next = beta;
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const candidate = Math.max(0.05, Math.min(20, beta - trialStep * gradient));
+      if (gaussianEnergy(candidate, coupling) <= energy) { next = candidate; break; }
+      trialStep *= 0.5;
+    }
+    beta = next;
   }
   return { coupling, beta0, step, iterations, points };
 }
