@@ -1,6 +1,6 @@
 # Quantum laboratory · Квантын лаборатори
 
-A Mongolian-first browser laboratory for quantum mechanics. Choose a physical system and an experiment: a qubit for preparation, measurement, fixed-Hamiltonian evolution, and parameter families; or an infinite 1D box for finite complex state construction, energy measurement, and spectral evolution.
+A Mongolian-first browser laboratory for quantum mechanics. Choose a physical system and an experiment: a qubit for preparation and measurement, a one-dimensional box for complex superpositions, and a harmonic oscillator for coherent-state dynamics and computational-method comparisons.
 
 **Open the laboratory:** https://gantemur.github.io/quantum/
 
@@ -13,7 +13,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:4173`. The application makes no external runtime requests. The English option is in the header; only that language preference is stored locally.
+Open `http://127.0.0.1:4173`. The application makes no external runtime requests. The English option is in the header. Language preference and, when explicitly saved, an oscillator workspace are stored locally in the browser.
 
 `npm run build` produces a self-contained static site in `dist/`. It uses Node's TypeScript stripping, native browser modules, SVG, and CSS. There is no application framework or numerical runtime dependency. Serve the generated directory over HTTP; do not open the HTML using a `file:` URL.
 
@@ -28,12 +28,14 @@ The **System** selector chooses the model; **Experiment** chooses an investigati
 
 - **Box state construction:** edit 1–16 complex eigenstate coefficients, normalize and apply a preparation, inspect the position wavefunction/density and energy populations, measure energy, and sample independently prepared copies. A fixed localized target makes cutoff comparisons meaningful.
 - **Box evolution:** evolve an applied finite superposition analytically, inspect an exact selected time, and compare its mean-position history with conserved energy populations. Length, mass, cutoff, method, and actual result inputs remain visible.
+- **Oscillator coherent motion:** choose the complex amplitude, mass, frequency, time interval, and number of modes; compare the full finite-expansion expectation values, uncertainty, classical trajectory, and exact selected-time spatial density. The reported retained weight quantifies coherent-state truncation before renormalization.
+- **Anharmonic ground state:** compare a Rayleigh–Ritz calculation, a separate larger-basis reference, and a one-parameter Gaussian variational calculation with its complete algorithm-iteration history. Physical time is never confused with iteration number.
 
 Panels have independent representation settings and can be added, removed, collapsed, featured, duplicated, or pinned to a result. Viewing and layout changes do not perform measurements or consume random draws. The learning area below the workspace contains mathematics, actual source excerpts, contextual exercises, hints, and bounded projects in Mongolian and English.
 
-**Setup JSON**, **Data CSV**, and **Figure SVG** export the active experiment. JSON is a versioned setup record, not a complete restorable session. CSV contains the current applied result, with inputs, coordinate meaning, units, and source provenance in comment lines. SVG exports the first expanded panel that contains a graph, including a pinned reference when that panel is pinned; its metadata records the actual binding and numerical-source revision. Collapsed and nongraph panels are skipped.
+**Setup JSON**, **Data CSV**, and **Figure SVG** export the active experiment. Qubit and box JSON are versioned setup records, not restorable sessions; oscillator JSON includes its bounded session data, but importing that JSON file is not yet implemented. The oscillator provides explicit **Save in browser / Restore saved workspace** controls in its method experiment. CSV contains the current applied result, with inputs, coordinate meaning, units, and source provenance in comment lines. SVG exports the first expanded panel that contains a graph, including a pinned reference when that panel is pinned; its metadata records the actual binding and numerical-source revision. Collapsed and nongraph panels are skipped.
 
-The current release covers qubits and the infinite 1D box. Oscillator experiments, persistent workspace import/restore, and iterative calculations remain future work. Workspace state is retained while the page remains open; a reload starts fresh except for the language preference.
+The current release covers qubits, the infinite 1D box, and the oscillator. Q3 adds the computational-history result shape and oscillator-only browser save/restore; unified save/import/restore for every system, adaptive oscillator panels, and advanced numerical methods remain future enhancements. Switching experiments preserves active work during a page session.
 
 ## Scientific conventions
 
@@ -41,7 +43,7 @@ The state is `rho = (I + r · sigma)/2`, with `|r| <= 1`. The Hamiltonian is tra
 
 The box is on `[0,L]`, with `hbar=1`, positive mass, and a maximum of 16 sine modes. Spectral phases and moments are analytic for the chosen finite expansion; the localized target projection uses numerical quadrature. Retained target weight is reported separately from the normalized prepared state and from left-half probability.
 
-See [the qubit mathematical guide](docs/MATHEMATICS.md) and [the box guide](docs/BOX.md) for formulas, normalization, sampling, result ownership, resource bounds, and code provenance.
+See [the qubit mathematical guide](docs/MATHEMATICS.md), [the box guide](docs/BOX.md), and [the oscillator guide](docs/OSCILLATOR.md) for formulas, normalization, numerical diagnostics, resource bounds, and code provenance.
 
 ## Checks
 
@@ -61,6 +63,8 @@ The numerical tests include hand-checkable spin states and matrix elements, inde
 | --- | --- |
 | `src/quantum.ts` | Pure numerical functions; no UI, hidden clock, or internal RNG state |
 | `src/box.ts` | Box modes, complex expansions, analytic moments, spectral histories, and energy measurement |
+| `src/oscillator.ts` | Coherent-state expansions, full operator moments, Rayleigh–Ritz, and variational iteration |
+| `src/oscillator-ui.ts` | Oscillator experiment controls, plots, learning area, bounded browser persistence |
 | `src/box-ui.ts` | Box experiment workspaces, explicit operations, retained results, panels, and exercises |
 | `src/exports.ts` | CSV formatting and portable SVG/download assembly |
 | `src/lab.ts` | Explicit operations and immutable-by-convention result records |

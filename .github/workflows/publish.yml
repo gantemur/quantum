@@ -1,0 +1,46 @@
+name: Publish Quantum laboratory
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: quantum-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run verify
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - name: Publish tested dist to gh-pages (fast-forward only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin gh-pages:refs/remotes/origin/gh-pages
+          git worktree add --detach /tmp/quantum-pages origin/gh-pages
+          rsync -a --delete --exclude='.git' dist/ /tmp/quantum-pages/
+          touch /tmp/quantum-pages/.nojekyll
+          cd /tmp/quantum-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish Quantum laboratory from ${GITHUB_SHA}"
+            git push origin HEAD:gh-pages
+          fi
