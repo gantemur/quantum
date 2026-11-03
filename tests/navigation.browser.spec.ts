@@ -29,7 +29,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('system and experiment navigation retain isolated states, drafts, panels, and results', async ({ page }) => {
-  await expect(page.locator('#system-select option')).toHaveCount(2);
+  await expect(page.locator('#system-select option')).toHaveCount(3);
   await expect(page.locator('#experiment-select option')).toHaveCount(3);
   await open(page, 'prepare-section');
   await page.locator('#preset').selectOption('plusZ');
