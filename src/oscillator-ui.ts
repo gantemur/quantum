@@ -59,17 +59,22 @@ function methodControls(): string {
   return details('osc-method-controls', `<span class="section-number">01</span>${L('Ангармоник үндсэн төлөв', 'Anharmonic ground state')}`, `<form id="osc-method-form">${number('osc-coupling', 'λ', methodDraft.coupling, 0, 2, 'any', 'coupling')}${number('osc-basis', L('Рэлей–Ритцийн N', 'Rayleigh–Ritz N'), methodDraft.basis, 2, 24, 1, 'basis')}<div class="input-row">${number('osc-beta0', 'β₀', methodDraft.beta0, 0.05, 20, 'any', 'beta0')}${number('osc-step', L('Алхам', 'Step'), methodDraft.step, 0.001, 2, 'any', 'step')}</div>${number('osc-iterations', L('Итераци', 'Iterations'), methodDraft.iterations, 1, 500, 1, 'iterations')}${button('osc-calculate-methods', L('Хоёр аргыг тооцоолох', 'Calculate both methods'), 'primary full')}<p class="help">${L('Рэлей–Ритц нь гармоник сууринд матриц диагональчилна. Вариацийн арга нь нэг параметртэй Гауссын гэр бүлийн энергийн функционалыг бууруулна.', 'Rayleigh–Ritz diagonalizes the Hamiltonian in a harmonic basis. The variational method minimizes the energy functional in a one-parameter Gaussian family.')}</p></form>`, 'control-section') + details('osc-persistence', `<span class="section-number">02</span>${L('Ажлын орон зай', 'Workspace')}`, `${button('osc-save-workspace', L('Хөтөчид хадгалах', 'Save in browser'), 'secondary full')}${button('osc-restore-workspace', L('Хадгалснаас сэргээх', 'Restore saved workspace'), 'text-button full')}<p class="help">${L('Схемийн хувилбар, оролт, үр дүн, хугацаа ба итерацийн курсорыг хадгална. Энэ нь зөвхөн осцилляторын Q3 ажлын орон зай.', 'Stores schema version, inputs, results, and the time/iteration cursors. This is the bounded Q3 oscillator workspace.')}</p>`, 'control-section');
 }
 
-function waveSamples(coeffs: Complex[], params: { mass: number; omega: number }): Series[] {
-  const scale = 4 / Math.sqrt(params.mass * params.omega), count = 241;
+function waveSamples(coeffs: Complex[], params: { mass: number; omega: number }, halfWidth: number): Series[] {
+  const count = 321;
   const data = Array.from({ length: count }, (_, i) => {
-    const x = -scale + 2 * scale * i / (count - 1), z = oscillatorWavefunction(coeffs, x, params);
+    const x = -halfWidth + 2 * halfWidth * i / (count - 1), z = oscillatorWavefunction(coeffs, x, params);
     return [x, z.re * z.re + z.im * z.im] as const;
   });
   return [{ label: '|ψ(x)|²', color: '#138a80', data }];
 }
 
 function motionPanels(): string {
-  const point = motionRun.points[nearestTime()], coeffs = oscillatorEvolve(motionRun.initial, timeCursor, motionRun.params), moments = oscillatorMoments(coeffs, motionRun.params);
+  const coeffs = oscillatorEvolve(motionRun.initial, timeCursor, motionRun.params), moments = oscillatorMoments(coeffs, motionRun.params);
+  const widthUnit = 1 / Math.sqrt(motionRun.params.mass * motionRun.params.omega);
+  const maxClassical = Math.max(...motionRun.points.map(p => Math.abs(p.classicalX)));
+  const halfWidth = maxClassical + 4 * widthUnit;
+  const densitySeries = waveSamples(coeffs, motionRun.params, halfWidth);
+  const maxDensity = Math.max(...densitySeries[0]!.data.map(p => p[1]));
   const momentSeries: Series[] = [
     { label: '⟨x⟩ quantum', color: '#138a80', data: motionRun.points.map(p => [p.t, p.meanX] as const) },
     { label: 'x classical', color: '#bc7a29', data: motionRun.points.map(p => [p.t, p.classicalX] as const) },
@@ -79,7 +84,7 @@ function motionPanels(): string {
   const widthScale = Math.max(1e-6, ...motionRun.points.map(p => Math.sqrt(p.varianceX)));
   const { commutator } = ladderMatrices(motionRun.initial.length);
   const diag = commutator.map((row, i) => row[i]);
-  return `<article id="osc-motion-density" class="panel is-featured" data-panel="osc-motion-density"><header class="panel-header"><div><strong>${L('Сонгосон хугацааны төлөв', 'State at selected time')}</strong><span class="panel-binding">t=${fmt(timeCursor, 4)} · N=${motionRun.initial.length} · η=${fmt(motionRun.retainedWeight ?? 1, 7)}</span></div></header><div class="panel-body">${lineChart(waveSamples(coeffs, motionRun.params), { id: 'osc-density-chart', xLabel: 'x', yLabel: '|ψ|²', xRange: [-8, 8], yRange: [0, 3], ariaLabel: L('Осцилляторын магадлалын нягт', 'Oscillator probability density') })}<dl class="stats"><div><dt>⟨x⟩</dt><dd>${fmt(moments.meanX)}</dd></div><div><dt>Δx</dt><dd>${fmt(Math.sqrt(moments.varianceX))}</dd></div><div><dt>⟨H⟩</dt><dd>${fmt(moments.meanEnergy)}</dd></div></dl></div></article>
+  return `<article id="osc-motion-density" class="panel is-featured" data-panel="osc-motion-density"><header class="panel-header"><div><strong>${L('Сонгосон хугацааны төлөв', 'State at selected time')}</strong><span class="panel-binding">t=${fmt(timeCursor, 4)} · N=${motionRun.initial.length} · η=${fmt(motionRun.retainedWeight ?? 1, 7)}</span></div></header><div class="panel-body">${lineChart(densitySeries, { id: 'osc-density-chart', xLabel: 'x', yLabel: '|ψ|²', xRange: [-halfWidth, halfWidth], yRange: [0, Math.max(0.01, 1.12 * maxDensity)], ariaLabel: L('Осцилляторын магадлалын нягт', 'Oscillator probability density') })}<dl class="stats"><div><dt>⟨x⟩</dt><dd>${fmt(moments.meanX)}</dd></div><div><dt>Δx</dt><dd>${fmt(Math.sqrt(moments.varianceX))}</dd></div><div><dt>⟨H⟩</dt><dd>${fmt(moments.meanEnergy)}</dd></div></dl></div></article>
   <article class="panel" data-panel="osc-motion-history"><header class="panel-header"><div><strong>${L('Дундаж байрлал ба классик зам', 'Mean position and classical path')}</strong><span class="panel-binding">${motionRun.sampleCount} ${L('хугацааны цэг', 'time points')}</span></div></header><div class="panel-body">${lineChart(momentSeries, { id: 'osc-moment-chart', xLabel: 'physical time t', yLabel: 'x', xRange: [0, motionRun.end], yRange: [-1.12 * motionScale, 1.12 * motionScale], ariaLabel: L('Дундаж байрлал', 'Mean position') })}${lineChart(widthSeries, { id: 'osc-width-chart', xLabel: 'physical time t', yLabel: 'Δx', xRange: [0, motionRun.end], yRange: [0, 1.2 * widthScale], ariaLabel: L('Байрлалын өргөн', 'Position width') })}<p class="panel-caption">${L('Когерент төлөвт ⟨x⟩ классик замыг дагана, харин өргөн тогтмол байх ёстой. Огтлолын алдааг η харуулна.', 'For a coherent state, ⟨x⟩ follows the classical trajectory while the width should remain constant. η reports the retained coherent-state weight before renormalization.')}</p></div></article>
   <article class="panel" data-panel="osc-operator"><header class="panel-header"><div><strong>${L('Операторын алгебр ба огтлол', 'Operator algebra and truncation')}</strong><span class="panel-binding">[a,a†] · N=${diag.length}</span></div></header><div class="panel-body"><div class="table-scroll"><table class="results-table"><thead><tr><th>n</th><th>⟨n|[a,a†]|n⟩</th></tr></thead><tbody>${diag.map((v, i) => `<tr><td>${i}</td><td>${fmt(v, 3)}</td></tr>`).join('')}</tbody></table></div><p class="panel-caption">${L('Доод төлөвүүд дээр 1, харин дээд огтлолын төлөв дээр 1−N гарна. Төгсгөлөг матриц яг каноник коммутатор байж чаддаггүй.', 'Low states see 1, while the cutoff state sees 1−N. A finite matrix representation cannot satisfy the canonical commutator exactly everywhere.')}</p></div></article>`;
 }
@@ -94,9 +99,15 @@ function methodPanels(): string {
     const beta = 0.25 + i * 2.75 / 160; return [beta, gaussianEnergy(beta, variational.coupling)] as const;
   }) }];
   const rrError = direct.energy - refined.energy, varError = selected.energy - refined.energy;
-  return `<article class="panel is-featured" data-panel="osc-method-history"><header class="panel-header"><div><strong>${L('Тооцооллын түүх', 'Computational history')}</strong><span class="panel-binding">${L('итераци', 'iteration')} k=${selected.iteration} · β=${fmt(selected.beta, 6)}</span></div></header><div class="panel-body">${lineChart(history, { id: 'osc-history-chart', xLabel: 'algorithm iteration k', yLabel: 'energy', xRange: [0, 500], yRange: [0, 20], ariaLabel: L('Вариацийн оптимизацийн түүх', 'Variational optimization history') })}<dl class="stats"><div><dt>E(βₖ)</dt><dd>${fmt(selected.energy, 8)}</dd></div><div><dt>|dE/dβ|</dt><dd>${fmt(Math.abs(selected.gradient), 8)}</dd></div><div><dt>E<sub>RR</sub></dt><dd>${fmt(direct.energy, 8)}</dd></div><div><dt>E<sub>ref</sub></dt><dd>${fmt(refined.energy, 8)}</dd></div></dl><p class="panel-caption">${L('k нь алгоритмын итераци; физик хугацаа биш. Жижиг градиент нь сонгосон Гауссын гэр бүлийн доторх оптимизацийн шалгуур бөгөөд суурийн огтлолын алдааг батлахгүй.', 'k is an algorithm iteration, not physical time. A small gradient certifies optimization only within the chosen Gaussian family; it does not certify basis-truncation error.')}</p></div></article>
+  const energies = [...variational.points.map(p => p.energy), direct.energy, refined.energy];
+  const minEnergy = Math.min(...energies), maxEnergy = Math.max(...energies);
+  const energyPad = Math.max(0.025, 0.1 * (maxEnergy - minEnergy));
+  const historyRange: [number, number] = [Math.max(0, minEnergy - energyPad), maxEnergy + energyPad];
+  const landscapeEnergies = landscape[0]!.data.map(p => p[1]);
+  const landscapeMax = Math.max(...landscapeEnergies);
+  return `<article class="panel is-featured" data-panel="osc-method-history"><header class="panel-header"><div><strong>${L('Тооцооллын түүх', 'Computational history')}</strong><span class="panel-binding">${L('итераци', 'iteration')} k=${selected.iteration} · β=${fmt(selected.beta, 6)}</span></div></header><div class="panel-body">${lineChart(history, { id: 'osc-history-chart', xLabel: 'algorithm iteration k', yLabel: 'energy', xRange: [0, Math.max(1, variational.iterations)], yRange: historyRange, ariaLabel: L('Вариацийн оптимизацийн түүх', 'Variational optimization history') })}<dl class="stats"><div><dt>E(βₖ)</dt><dd>${fmt(selected.energy, 8)}</dd></div><div><dt>|dE/dβ|</dt><dd>${fmt(Math.abs(selected.gradient), 8)}</dd></div><div><dt>E<sub>RR</sub></dt><dd>${fmt(direct.energy, 8)}</dd></div><div><dt>E<sub>ref</sub></dt><dd>${fmt(refined.energy, 8)}</dd></div></dl><p class="panel-caption">${L('k нь алгоритмын итераци; физик хугацаа биш. Жижиг градиент нь сонгосон Гауссын гэр бүлийн доторх оптимизацийн шалгуур бөгөөд суурийн огтлолын алдааг батлахгүй.', 'k is an algorithm iteration, not physical time. A small gradient certifies optimization only within the chosen Gaussian family; it does not certify basis-truncation error.')}</p></div></article>
   <article id="osc-method-comparison" class="panel" data-panel="osc-method-comparison"><header class="panel-header"><div><strong>${L('Аргуудын харьцуулалт', 'Method comparison')}</strong><span class="panel-binding">λ=${fmt(direct.coupling, 3)}</span></div></header><div class="panel-body"><div class="table-scroll"><table class="results-table"><thead><tr><th>${L('Арга', 'Method')}</th><th>E</th><th>${L('Лавлагаанаас зөрүү', 'Error vs reference')}</th><th>${L('Диагностик', 'Diagnostic')}</th></tr></thead><tbody><tr><td>${L('Гауссын вариац', 'Gaussian variational')}</td><td>${fmt(selected.energy, 8)}</td><td>${fmt(varError, 8)}</td><td>|∂βE|=${fmt(Math.abs(selected.gradient), 6)}</td></tr><tr><td>Rayleigh–Ritz N=${direct.basisSize}</td><td>${fmt(direct.energy, 8)}</td><td>${fmt(rrError, 8)}</td><td>‖Hc−Ec‖=${fmt(direct.residual, 3)}</td></tr><tr><td>${L('Тусдаа нарийвчилсан лавлагаа', 'Separate refined reference')} N=${refined.basisSize}</td><td>${fmt(refined.energy, 8)}</td><td>0</td><td>‖Hc−Ec‖=${fmt(refined.residual, 3)}</td></tr></tbody></table></div><p class="panel-caption">${L('Вариацийн энерги нь өөрийн жижиг гэр бүлийн хязгаарлалтыг агуулна. Рэлей–Ритцийн алдааг илүү том N-ийн тусдаа тооцоотой харьцуулна.', 'The variational energy includes restriction to its small trial family. Rayleigh–Ritz truncation is checked against a separately refined larger basis.')}</p></div></article>
-  <article class="panel" data-panel="osc-method-landscape"><header class="panel-header"><div><strong>${L('Энергийн функционал', 'Energy functional')}</strong><span class="panel-binding">E(β) · λ=${fmt(variational.coupling, 3)}</span></div></header><div class="panel-body">${lineChart(landscape, { id: 'osc-landscape-chart', xLabel: 'trial parameter β', yLabel: 'E(β)', xRange: [0, 4], yRange: [0, 25], ariaLabel: L('Гауссын энергийн функционал', 'Gaussian energy functional') })}<p class="panel-caption">E(β)=¼(β+β⁻¹)+¾λβ⁻².</p></div></article>`;
+  <article class="panel" data-panel="osc-method-landscape"><header class="panel-header"><div><strong>${L('Энергийн функционал', 'Energy functional')}</strong><span class="panel-binding">E(β) · λ=${fmt(variational.coupling, 3)}</span></div></header><div class="panel-body">${lineChart(landscape, { id: 'osc-landscape-chart', xLabel: 'trial parameter β', yLabel: 'E(β)', xRange: [0.25, 3], yRange: [0, 1.08 * landscapeMax], ariaLabel: L('Гауссын энергийн функционал', 'Gaussian energy functional') })}<p class="panel-caption">E(β)=¼(β+β⁻¹)+¾λβ⁻².</p></div></article>`;
 }
 
 function learning(code: (id: string, title: string) => string): string {
@@ -115,8 +126,6 @@ function coordinate(): string {
 }
 
 export function renderOscillator(lang: Language, code: (id: string, title: string) => string): string {
-  const selected = typeof document === 'undefined' ? null : document.querySelector<HTMLSelectElement>('#experiment-select');
-  if (selected?.value === 'motion' || selected?.value === 'methods') mode = selected.value;
   language = lang;
   return `<div class="lab-layout"><aside class="controls" aria-label="${L('Туршилтын тохиргоо', 'Experiment setup')}">${mode === 'motion' ? motionControls() : methodControls()}</aside><section class="workspace" id="osc-workspace" tabindex="-1"><div class="workspace-top"><div><span class="eyebrow">${L('Тооцооллын арга', 'Computational method')}</span><button class="method-link" data-action="osc-show-method">${mode === 'motion' ? L('Аналитик суурь + спектрийн хувьсал', 'Analytic basis + spectral evolution') : L('Вариац + Рэлей–Ритц', 'Variational + Rayleigh–Ritz')} <span aria-hidden="true">↗</span></button></div><div class="workspace-actions">${button('osc-show-method', '&lt;/&gt;', 'code-button')}${mode === 'methods' ? button('osc-save-workspace', L('Хадгалах', 'Save'), 'secondary') : ''}</div></div>${coordinate()}<div class="notice ${notice?.error ? 'error' : ''}" id="osc-notice" role="status">${notice ? esc(notice[language]) : ''}</div><div class="panel-deck">${mode === 'motion' ? motionPanels() : methodPanels()}</div><div class="workspace-bottom"><span class="status-dot"></span>${L('Физик хугацаа ба алгоритмын итераци тусдаа координатууд.', 'Physical time and algorithm iteration are distinct coordinates.')}</div></section></div>${learning(code)}`;
 }
@@ -129,10 +138,15 @@ function calculateMotion(): void {
   notice = { mn: 'Когерент төлөвийн хувьслыг шинэ оролтоор тооцооллоо.', en: 'Calculated coherent-state evolution from the new inputs.', error: false };
 }
 function calculateMethods(): void {
+  // Compute the entire matched result before replacing the previously displayed run.
+  // An invalid beta/step must not leave new Ritz data paired with old iterates.
   const coupling = numeric(methodDraft.coupling, 0, 2), basis = numeric(methodDraft.basis, 2, 24, true);
-  direct = rayleighRitzGround(basis, coupling);
-  refined = rayleighRitzGround(Math.min(32, Math.max(24, basis + 8)), coupling);
-  variational = optimizeGaussian(coupling, numeric(methodDraft.beta0, 0.05, 20), numeric(methodDraft.step, 0.001, 2), numeric(methodDraft.iterations, 1, 500, true));
+  const beta0 = numeric(methodDraft.beta0, 0.05, 20), step = numeric(methodDraft.step, 0.001, 2);
+  const iterations = numeric(methodDraft.iterations, 1, 500, true);
+  const newDirect = rayleighRitzGround(basis, coupling);
+  const newRefined = rayleighRitzGround(Math.min(32, Math.max(24, basis + 8)), coupling);
+  const newVariational = optimizeGaussian(coupling, beta0, step, iterations);
+  direct = newDirect; refined = newRefined; variational = newVariational;
   iterationCursor = variational.points.length - 1;
   notice = { mn: 'Хоёр аргын шинэ үр дүнг тооцооллоо.', en: 'Calculated new results for both methods.', error: false };
 }
@@ -141,10 +155,50 @@ function workspace(): OscillatorWorkspace {
 }
 export function oscillatorSnapshot(): unknown { return workspace(); }
 export function restoreOscillatorSnapshot(value: unknown): void {
-  const w = value as Partial<OscillatorWorkspace>;
-  if (w?.schema !== 'quantum-oscillator-workspace' || w.schemaVersion !== 1 || (w.mode !== 'motion' && w.mode !== 'methods') || !w.motionDraft || !w.methodDraft || !w.motionRun || !w.direct || !w.refined || !w.variational) throw new RangeError('unsupported oscillator workspace');
-  mode = w.mode; motionDraft = { ...w.motionDraft }; methodDraft = { ...w.methodDraft }; motionRun = w.motionRun; direct = w.direct; refined = w.refined; variational = w.variational;
-  timeCursor = Number(w.timeCursor ?? 0); iterationCursor = Number(w.iterationCursor ?? variational.points.length - 1);
+  // Browser storage is not trusted. Validate the full structure before touching
+  // any live state; malformed or older data must leave all results intact.
+  const w = value as Partial<OscillatorWorkspace> | null;
+  const finite = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
+  const complex = (x: unknown): x is Complex => !!x && typeof x === 'object'
+    && finite((x as Complex).re) && finite((x as Complex).im);
+  const draft = (x: unknown, keys: string[]): boolean => !!x && typeof x === 'object'
+    && keys.every(k => typeof (x as Record<string, unknown>)[k] === 'string');
+  const run = w?.motionRun, rr = w?.direct, ref = w?.refined, v = w?.variational;
+  const validRitz = (r: AnharmonicRun | undefined) => !!r &&
+    Number.isInteger(r.basisSize) && r.basisSize >= 2 && r.basisSize <= 32 &&
+    finite(r.coupling) && r.coupling >= 0 && r.coupling <= 2 &&
+    finite(r.energy) && finite(r.residual) && r.residual >= 0 && finite(r.x2) &&
+    Array.isArray(r.vector) && r.vector.length === r.basisSize && r.vector.every(finite);
+  const validPoint = (p: OscillatorTimeRun['points'][number]) =>
+    !!p && ['t','norm','meanX','meanP','varianceX','varianceP','meanEnergy','classicalX','classicalP']
+      .every(k => finite((p as unknown as Record<string, unknown>)[k])) && p.varianceX >= 0 && p.varianceP >= 0;
+  if (w?.schema !== 'quantum-oscillator-workspace' || w.schemaVersion !== 1 ||
+      (w.mode !== 'motion' && w.mode !== 'methods') ||
+      !draft(w.motionDraft, ['alphaRe','alphaIm','modes','end','mass','omega']) ||
+      !draft(w.methodDraft, ['coupling','basis','beta0','step','iterations']) ||
+      !run || !run.params || !finite(run.params.mass) || run.params.mass <= 0 || run.params.mass > 5 ||
+      !finite(run.params.omega) || run.params.omega <= 0 || run.params.omega > 5 ||
+      !finite(run.end) || run.end <= 0 || run.end > 100 ||
+      !Array.isArray(run.initial) || run.initial.length < 2 || run.initial.length > 32 ||
+      !run.initial.every(complex) || !Array.isArray(run.points) ||
+      run.points.length < 2 || run.points.length > 16385 ||
+      run.sampleCount !== run.points.length || !run.points.every(validPoint) ||
+      (run.retainedWeight !== null && (!finite(run.retainedWeight) || run.retainedWeight < 0 || run.retainedWeight > 1 + 1e-10)) ||
+      !validRitz(rr) || !validRitz(ref) || !v ||
+      !finite(v.coupling) || v.coupling < 0 || v.coupling > 2 ||
+      !finite(v.beta0) || !finite(v.step) || !Number.isInteger(v.iterations) ||
+      v.iterations < 1 || v.iterations > 500 || !Array.isArray(v.points) ||
+      v.points.length !== v.iterations + 1 ||
+      !v.points.every((p, i) => p && p.iteration === i && finite(p.beta) && p.beta > 0 &&
+        finite(p.energy) && finite(p.gradient)) ||
+      !finite(w.timeCursor) || w.timeCursor < 0 || w.timeCursor > run.end ||
+      !Number.isInteger(w.iterationCursor) || w.iterationCursor! < 0 || w.iterationCursor! >= v.points.length) {
+    throw new RangeError('unsupported or corrupt oscillator workspace');
+  }
+  mode = w.mode;
+  motionDraft = { ...w.motionDraft! }; methodDraft = { ...w.methodDraft! };
+  motionRun = run; direct = rr!; refined = ref!; variational = v;
+  timeCursor = w.timeCursor!; iterationCursor = w.iterationCursor!;
 }
 export function oscillatorExportSetup(): unknown { return workspace(); }
 export function oscillatorExportData(): { metadata: Record<string, unknown>; columns: string[]; rows: (string | number | null)[][] } {
