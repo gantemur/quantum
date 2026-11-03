@@ -80,19 +80,35 @@ export function positionMatrix(count: number, params: OscillatorParams): number[
 
 export function oscillatorMoments(coeffs0: readonly Complex[], params: OscillatorParams): OscillatorMoments {
   checkedParams(params);
-  const coeffs = normalizeOscillator(coeffs0), n = coeffs.length, x = positionMatrix(n, params), x2 = multiply(x, x);
-  const applyReal = (m: readonly number[][]) => m.map(row => row.reduce((z, a, j) => ({ re: z.re + a * coeffs[j].re, im: z.im + a * coeffs[j].im }), { re: 0, im: 0 }));
-  const expReal = (m: readonly number[][]) => {
-    const mv = applyReal(m);
-    return coeffs.reduce((s, c, i) => s + c.re * mv[i].re + c.im * mv[i].im, 0);
+  const coeffs = normalizeOscillator(coeffs0);
+  // Evaluate full-operator moments on the finite state, not squares of
+  // projected position/momentum matrices. The latter drop top-mode
+  // transitions and give spurious zero uncertainty for N=1.
+  let nMean = 0, aRe = 0, aIm = 0, a2Re = 0;
+  for (let n = 0; n < coeffs.length; n++) {
+    const c = coeffs[n]!;
+    nMean += n * abs2(c);
+    if (n + 1 < coeffs.length) {
+      const next = coeffs[n + 1]!, scale = Math.sqrt(n + 1);
+      aRe += scale * (c.re * next.re + c.im * next.im);
+      aIm += scale * (c.re * next.im - c.im * next.re);
+    }
+    if (n + 2 < coeffs.length) {
+      const next = coeffs[n + 2]!;
+      a2Re += Math.sqrt((n + 1) * (n + 2)) * (c.re * next.re + c.im * next.im);
+    }
+  }
+  const mw = params.mass * params.omega;
+  const meanX = Math.sqrt(2 / mw) * aRe;
+  const meanP = Math.sqrt(2 * mw) * aIm;
+  const x2 = (2 * nMean + 1 + 2 * a2Re) / (2 * mw);
+  const p2 = mw * (2 * nMean + 1 - 2 * a2Re) / 2;
+  return {
+    norm: 1, meanX, meanP,
+    varianceX: Math.max(0, x2 - meanX * meanX),
+    varianceP: Math.max(0, p2 - meanP * meanP),
+    meanEnergy: params.omega * (nMean + 0.5),
   };
-  const ex = expReal(x), ex2 = expReal(x2);
-  const { a, adag } = ladderMatrices(n), pscale = Math.sqrt(params.mass * params.omega / 2);
-  const pv = coeffs.map((_, i) => Array.from({ length: n }, (_, j) => ({ re: 0, im: pscale * (adag[i][j] - a[i][j]) })))
-    .map(row => row.reduce((z, q, j) => ({ re: z.re + q.re * coeffs[j].re - q.im * coeffs[j].im, im: z.im + q.re * coeffs[j].im + q.im * coeffs[j].re }), { re: 0, im: 0 }));
-  const ep = coeffs.reduce((s, c, i) => s + c.re * pv[i].re + c.im * pv[i].im, 0), ep2 = pv.reduce((s, z) => s + abs2(z), 0);
-  return { norm: 1, meanX: ex, meanP: ep, varianceX: Math.max(0, ex2 - ex * ex), varianceP: Math.max(0, ep2 - ep * ep),
-    meanEnergy: coeffs.reduce((s, c, i) => s + abs2(c) * oscillatorEnergy(i, params), 0) };
 }
 
 export function oscillatorWavefunction(coeffs0: readonly Complex[], x: number, params: OscillatorParams): Complex {
@@ -147,8 +163,8 @@ export function rayleighRitzGround(count: number, coupling: number): AnharmonicR
   const h = anharmonicHamiltonian(count, coupling), eig = jacobiEigen(h), vector = eig.vectors[0], energy = eig.values[0];
   const hv = h.map(row => row.reduce((s, value, j) => s + value * vector[j], 0));
   const residual = Math.sqrt(hv.reduce((s, value, i) => s + (value - energy * vector[i]) ** 2, 0));
-  const x = positionMatrix(count, { mass: 1, omega: 1 }), x2 = multiply(x, x), x2v = x2.map(row => row.reduce((s, value, j) => s + value * vector[j], 0));
-  return { coupling, basisSize: count, energy, vector: [...vector], residual, x2: vector.reduce((s, value, i) => s + value * x2v[i], 0) };
+  const moments = oscillatorMoments(vector.map(re => ({ re, im: 0 })), { mass: 1, omega: 1 });
+  return { coupling, basisSize: count, energy, vector: [...vector], residual, x2: moments.varianceX + moments.meanX * moments.meanX };
 }
 // @snippet oscillator-ritz:end
 

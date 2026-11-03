@@ -40,3 +40,23 @@ test('Rayleigh-Ritz and Gaussian variational calculations have independent diagn
   assert.ok(run.points.at(-1)!.energy<=run.points[0].energy);
   assert.ok(run.points.at(-1)!.energy>=rr.energy-1e-10);
 });
+
+// Full observables must not be replaced by the square of a projected operator.
+test('cutoff eigenstates retain the correct x and p uncertainties', () => {
+  for (const count of [1, 2, 3, 8]) {
+    const coeffs = Array.from({ length: count }, (_, i) => ({ re: Number(i === count - 1), im: 0 }));
+    const params = { mass: 0.7, omega: 2.2 };
+    const got = oscillatorMoments(coeffs, params);
+    close(got.varianceX, (count - 0.5) / (params.mass * params.omega), 1e-12);
+    close(got.varianceP, (count - 0.5) * params.mass * params.omega, 1e-12);
+    assert.ok(got.varianceX * got.varianceP >= 0.25 - 1e-12);
+  }
+});
+
+test('nonadjacent superpositions contribute to full x² and p² with opposite signs', () => {
+  const c = [{ re: 1 / Math.SQRT2, im: 0 }, { re: 0, im: 0 }, { re: 1 / Math.SQRT2, im: 0 }];
+  const m = oscillatorMoments(c, { mass: 1, omega: 1 });
+  close(m.meanX, 0); close(m.meanP, 0);
+  close(m.varianceX, 1.5 + Math.SQRT2 / 2);
+  close(m.varianceP, 1.5 - Math.SQRT2 / 2);
+});
