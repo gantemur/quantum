@@ -4,6 +4,7 @@ import { lessonContent,               } from './lessons.js';
 import { translator,              } from './i18n.js';
 import { blochSvg, lineChart } from './plots.js';
 import { getBoxMode, selectBoxExperiment, renderBox, handleBoxClick, handleBoxInput, handleBoxChange, refreshBoxInputs, captureBoxDetails, boxSnapshot, boxExportSetup, boxExportData, boxFigureMetadata,              } from './box-ui.js';
+import { getOscillatorMode, selectOscillatorExperiment, renderOscillator, handleOscillatorClick, handleOscillatorInput, handleOscillatorChange, captureOscillatorDetails, oscillatorSnapshot, oscillatorExportSetup, oscillatorExportData, oscillatorFigureMetadata,                     } from './oscillator-ui.js';
 import { dataCsv, downloadText, figureSvg,                 } from './exports.js';
 
                                         
@@ -11,8 +12,9 @@ import { dataCsv, downloadText, figureSvg,                 } from './exports.js'
                                                                                                                                                                                                              
                                                                                                                 
                                                                                                                                                                                                                                                                        
-                              
-let system         = 'qubit';
+                                             
+const requestedSystem = new URLSearchParams(location.search).get('system');
+let system         = requestedSystem === 'box' || requestedSystem === 'oscillator' ? requestedSystem : 'qubit';
 
 let lab = createLab();
 let mode       = 'state';
@@ -46,6 +48,7 @@ let renderedContext = '';
 const words = (mn        , en        )         => lang === 'mn' ? mn : en;
 function captureDetails()       {
   if (system === 'box') { captureBoxDetails(app); return; }
+  if (system === 'oscillator') { captureOscillatorDetails(app); return; }
   for (const d of app.querySelectorAll                    ('details[id]')) d.open ? openSections.add(d.id) : openSections.delete(d.id);
 }
 function saveSession()       {
@@ -208,6 +211,7 @@ function learning()         {
 }
 function experimentLabel()         {
   if (system === 'box') return getBoxMode() === 'state' ? words('Төлөв бүтээх ба энерги хэмжих', 'State construction & energy measurement') : words('Хугацааны хувьсал', 'Time evolution');
+  if (system === 'oscillator') return getOscillatorMode() === 'motion' ? words('Когерент төлөв ба хөдөлгөөн', 'Coherent state and motion') : words('Ангармоник ойролцооллын аргууд', 'Anharmonic approximation methods');
   return words({ state: 'Төлөв бэлтгэх ба хэмжих', time: 'Тогтмол H: хугацааны хувьсал', family: 'H(λ): параметрийн бүл', }[mode], { state: 'State preparation & measurement', time: 'Time evolution at fixed H', family: 'Hamiltonian parameter family' }[mode]);
 }
 function navigation()         {
@@ -215,15 +219,19 @@ function navigation()         {
     ['state', words('Төлөв бэлтгэх ба хэмжих', 'State preparation & measurement')],
     ['time', words('Тогтмол H: хугацааны хувьсал', 'Time evolution at fixed H')],
     ['family', words('H(λ): параметрийн бүл', 'Hamiltonian parameter family')],
-  ] : [
+  ] : system === 'box' ? [
     ['state', words('Төлөв бүтээх ба энерги хэмжих', 'State construction & energy measurement')],
     ['time', words('Хугацааны хувьсал', 'Time evolution')],
+  ] : [
+    ['motion', words('Когерент төлөв ба хөдөлгөөн', 'Coherent state and motion')],
+    ['methods', words('Ангармоник ойролцооллын аргууд', 'Anharmonic approximation methods')],
   ];
   const question = system === 'box' ? (getBoxMode() === 'state'
     ? words('Комплекс коэффициентүүд байрлалын нягт ба энергийн магадлалыг хэрхэн тодорхойлох вэ?', 'How do complex coefficients determine position density and energy probabilities?')
     : words('Тогтмол энергийн магадлалтай үед интерференц ба байрлалын дундаж хэрхэн өөрчлөгдөх вэ?', 'How do interference and mean position evolve while energy probabilities stay fixed?'))
+    : system === 'oscillator' ? (getOscillatorMode() === 'motion' ? words('Когерент төлөвийн квант дундаж классик хөдөлгөөнтэй хэрхэн холбогдох вэ?', 'How does coherent-state quantum motion track the classical oscillator?') : words('Вариац ба Рэлей–Ритц нэг үндсэн төлөвийг хэр сайн ойролцоо болгох вэ?', 'How well do variational and Rayleigh–Ritz methods approximate the same ground state?'))
     : words({ state: 'Бэлтгэл, эргэлт, хэмжилт төлөв болон дараагийн үр дүнг хэрхэн өөрчлөх вэ?', time: 'Өгөгдсөн эхний төлөв тогтмол Гамильтонианы дор хэрхэн хувьсах вэ?', family: 'Гамильтониан өөрчлөгдөхөд энерги ба хувийн төлөвүүд хэрхэн өөрчлөгдөх вэ?' }[mode], { state: 'How do preparation, rotation, and measurement change the state and later outcomes?', time: 'How does a chosen initial state evolve under a fixed Hamiltonian?', family: 'How do energies and eigenstates change across a family of Hamiltonians?' }[mode]);
-  return `<section class="experiment-navigation" aria-label="${words('Систем ба туршилт', 'System and experiment')}"><div class="context-selectors"><label for="system-select"><span class="eyebrow">${words('Систем', 'System')}</span><select id="system-select">${option('qubit', words('Кубит · хоёр төлөвт систем', 'Qubit · two-level system'), system)}${option('box', words('Хязгааргүй 1D хайрцаг', 'Infinite 1D box'), system)}</select></label><span class="context-arrow" aria-hidden="true">›</span><label for="experiment-select"><span class="eyebrow">${words('Туршилт', 'Experiment')}</span><select id="experiment-select">${experiments.map(([value, label]) => option(value, label, system === 'qubit' ? mode : getBoxMode())).join('')}</select></label><span class="unit-label">ℏ = 1</span></div><h1>${experimentLabel()}</h1><p class="experiment-question">${question}</p><p class="navigation-help">${words('Туршилт солиход тохиргоо, үр дүн, самбарууд хадгалагдана. Төлөв дамжуулахдаа тусгай товчийг ашиглана.', 'Switching experiments preserves settings, results, and panels. Use an explicit transfer to carry a state into another experiment.')}</p></section>`;
+  return `<section class="experiment-navigation" aria-label="${words('Систем ба туршилт', 'System and experiment')}"><div class="context-selectors"><label for="system-select"><span class="eyebrow">${words('Систем', 'System')}</span><select id="system-select">${option('qubit', words('Кубит · хоёр төлөвт систем', 'Qubit · two-level system'), system)}${option('box', words('Хязгааргүй 1D хайрцаг', 'Infinite 1D box'), system)}${option('oscillator', words('Гармоник осциллятор', 'Harmonic oscillator'), system)}</select></label><span class="context-arrow" aria-hidden="true">›</span><label for="experiment-select"><span class="eyebrow">${words('Туршилт', 'Experiment')}</span><select id="experiment-select">${experiments.map(([value, label]) => option(value, label, system === 'qubit' ? mode : system === 'box' ? getBoxMode() : getOscillatorMode())).join('')}</select></label><span class="unit-label">ℏ = 1</span></div><h1>${experimentLabel()}</h1><p class="experiment-question">${question}</p><p class="navigation-help">${words('Туршилт солиход тохиргоо, үр дүн, самбарууд хадгалагдана. Төлөв дамжуулахдаа тусгай товчийг ашиглана.', 'Switching experiments preserves settings, results, and panels. Use an explicit transfer to carry a state into another experiment.')}</p></section>`;
 }
 function resultStatus()         {
   let dirty = false;
@@ -238,12 +246,12 @@ function exportToolbar()         {
 }
 function render(capture = true)       {
   const activeId = (document.activeElement                      )?.id;
-  const context = `${system}:${system === 'qubit' ? mode : getBoxMode()}`;
+  const context = `${system}:${system === 'qubit' ? mode : system === 'box' ? getBoxMode() : getOscillatorMode()}`;
   if (capture && renderedContext === context) captureDetails();
   t = translator(lang); document.documentElement.lang = lang;
-  document.querySelector                   ('.skip')?.setAttribute('href', system === 'box' ? '#box-workspace' : '#workspace');
+  document.querySelector                   ('.skip')?.setAttribute('href', system === 'box' ? '#box-workspace' : system === 'oscillator' ? '#osc-workspace' : '#workspace');
   document.title = `${t('brand')} · ${experimentLabel()}`;
-  const body = system === 'box' ? renderBox(lang, sourceDisclosure) : `<div class="lab-layout"><aside class="controls" aria-label="${t('experiment')}">${mode === 'state' ? stateControls() : mode === 'time' ? timeControls() : familyControls()}</aside><section class="workspace" id="workspace" tabindex="-1"><div class="workspace-top"><div><span class="eyebrow">${t('method')}</span><button id="method-link" class="method-link" data-action="show-method">${methodLabel()} <span aria-hidden="true">↗</span></button></div><div class="workspace-actions">${button('show-method', '&lt;/&gt;', 'code-button', `aria-label="${t('openMethod')}" title="${t('openMethod')}"`)}${button('add-panel', `+ ${t('addPanel')}`, 'secondary', panels[mode].length >= 4 ? `disabled title="${t('panelLimit')}"` : '')}</div></div>${resultStatus()}${coordinateControls()}<div id="notice" class="notice ${noticeIsError ? 'error' : ''}" role="status" aria-live="polite">${notice ? t(notice) : ''}</div><div class="panel-deck" id="panel-deck">${panels[mode].map(panelHtml).join('')}</div><div class="workspace-bottom"><span class="status-dot"></span>${t('methodHelp')}</div></section></div>${learning()}`;
+  const body = system === 'box' ? renderBox(lang, sourceDisclosure) : system === 'oscillator' ? renderOscillator(lang, sourceDisclosure) : `<div class="lab-layout"><aside class="controls" aria-label="${t('experiment')}">${mode === 'state' ? stateControls() : mode === 'time' ? timeControls() : familyControls()}</aside><section class="workspace" id="workspace" tabindex="-1"><div class="workspace-top"><div><span class="eyebrow">${t('method')}</span><button id="method-link" class="method-link" data-action="show-method">${methodLabel()} <span aria-hidden="true">↗</span></button></div><div class="workspace-actions">${button('show-method', '&lt;/&gt;', 'code-button', `aria-label="${t('openMethod')}" title="${t('openMethod')}"`)}${button('add-panel', `+ ${t('addPanel')}`, 'secondary', panels[mode].length >= 4 ? `disabled title="${t('panelLimit')}"` : '')}</div></div>${resultStatus()}${coordinateControls()}<div id="notice" class="notice ${noticeIsError ? 'error' : ''}" role="status" aria-live="polite">${notice ? t(notice) : ''}</div><div class="panel-deck" id="panel-deck">${panels[mode].map(panelHtml).join('')}</div><div class="workspace-bottom"><span class="status-dot"></span>${t('methodHelp')}</div></section></div>${learning()}`;
   app.innerHTML = `<header class="topbar"><a class="brand" href="./"><img src="./icon.svg" width="38" height="38" alt=""><span>${t('brand')}<small>${t('subtitle')}</small></span></a><div class="topbar-right"><div class="language-switch" aria-label="Language / Хэл">${button('language', 'MN', lang === 'mn' ? 'selected' : '', 'data-lang="mn" aria-label="Монгол"')}${button('language', 'EN', lang === 'en' ? 'selected' : '', 'data-lang="en" aria-label="English"')}</div></div></header><main>${navigation()}${exportToolbar()}${body}</main><footer><span>${t('footer')}</span><a href="https://github.com/gantemur/quantum" target="_blank" rel="noreferrer">${t('footerSource')} ↗</a></footer>`;
   renderedContext = context;
   if (activeId) (document.getElementById(activeId) ?? document.querySelector             ('.panel .tool-select'))?.focus({ preventScroll: true });
@@ -281,14 +289,14 @@ function qubitData(b          = binding())             {
 }
 function exportCurrent(kind        )       {
   saveSession();
-  const experiment = system === 'qubit' ? mode : getBoxMode();
+  const experiment = system === 'qubit' ? mode : system === 'box' ? getBoxMode() : getOscillatorMode();
   const name = `quantum-${system}-${experiment}`;
-  const provenance = { version: source?.version ?? '0.2.0', sourceRevision: source?.revision ?? null, numericalSourceHashes: source?.sourceFiles ?? null };
+  const provenance = { version: source?.version ?? '0.3.0', sourceRevision: source?.revision ?? null, numericalSourceHashes: source?.sourceFiles ?? null };
   if (kind === 'export-setup') {
-    const setup = { kind: 'quantum-lab-setup', schemaVersion: 1, scope: 'active experiment; setup record, not full session restoration', system, experiment, provenance, setup: system === 'box' ? boxExportSetup() : { prepared: lab.prepared, current: lab.current, draft, initialStateOrigin: sessions[mode].origin, transferSource: sessions[mode].transfer, seed: lab.seed, actualResult: mode === 'time' ? { id: lab.time.id, initial: lab.time.initial, h: lab.time.h, end: lab.time.end, method: lab.time.method } : mode === 'family' ? { id: lab.family.id, delta: lab.family.delta } : { operationCount: lab.operationCount }, cursor: mode === 'time' ? { index: timeIndex, t: timePoint(lab.time, timeIndex).t } : mode === 'family' ? { index: familyIndex, lambda: lab.family.points[familyIndex].lambda, branch } : null, panels: panels[mode].map(p => ({ id: p.id, tool: p.tool, basis: p.basis, gamma: p.gamma, collapsed: p.collapsed, pinned: p.pinned ? { label: bindingLabel(p.pinned), state: p.pinned.r, mode: p.pinned.mode, result: p.pinned.mode === 'time' ? { id: p.pinned.time.id, initial: p.pinned.time.initial, h: p.pinned.time.h, end: p.pinned.time.end, method: p.pinned.time.method, t: timePoint(p.pinned.time, p.pinned.timeIndex).t } : p.pinned.mode === 'family' ? { id: p.pinned.family.id, delta: p.pinned.family.delta, lambda: p.pinned.family.points[p.pinned.familyIndex].lambda, branch: p.pinned.branch } : { operations: p.pinned.operations, batch: p.pinned.batch } } : null })) } };
+    const setup = { kind: 'quantum-lab-setup', schemaVersion: 1, scope: 'active experiment; setup record, not full session restoration', system, experiment, provenance, setup: system === 'box' ? boxExportSetup() : system === 'oscillator' ? oscillatorExportSetup() : { prepared: lab.prepared, current: lab.current, draft, initialStateOrigin: sessions[mode].origin, transferSource: sessions[mode].transfer, seed: lab.seed, actualResult: mode === 'time' ? { id: lab.time.id, initial: lab.time.initial, h: lab.time.h, end: lab.time.end, method: lab.time.method } : mode === 'family' ? { id: lab.family.id, delta: lab.family.delta } : { operationCount: lab.operationCount }, cursor: mode === 'time' ? { index: timeIndex, t: timePoint(lab.time, timeIndex).t } : mode === 'family' ? { index: familyIndex, lambda: lab.family.points[familyIndex].lambda, branch } : null, panels: panels[mode].map(p => ({ id: p.id, tool: p.tool, basis: p.basis, gamma: p.gamma, collapsed: p.collapsed, pinned: p.pinned ? { label: bindingLabel(p.pinned), state: p.pinned.r, mode: p.pinned.mode, result: p.pinned.mode === 'time' ? { id: p.pinned.time.id, initial: p.pinned.time.initial, h: p.pinned.time.h, end: p.pinned.time.end, method: p.pinned.time.method, t: timePoint(p.pinned.time, p.pinned.timeIndex).t } : p.pinned.mode === 'family' ? { id: p.pinned.family.id, delta: p.pinned.family.delta, lambda: p.pinned.family.points[p.pinned.familyIndex].lambda, branch: p.pinned.branch } : { operations: p.pinned.operations, batch: p.pinned.batch } } : null })) } };
     downloadText(`${name}-setup.json`, JSON.stringify(setup, null, 2) + '\n', 'application/json');
   } else if (kind === 'export-data') {
-    const data = system === 'box' ? boxExportData() : qubitData();
+    const data = system === 'box' ? boxExportData() : system === 'oscillator' ? oscillatorExportData() : qubitData();
     data.metadata = { ...data.metadata, provenance };
     downloadText(`${name}-data.csv`, dataCsv(data), 'text/csv;charset=utf-8');
   } else {
@@ -296,11 +304,11 @@ function exportCurrent(kind        )       {
     if (!svg) return;
     const element = svg.closest             ('[data-panel]') ;
     const select = element.querySelector                   ('.tool-select');
-    const title = `${system === 'box' ? words('1D хайрцаг', '1D box') : t('qubit')} · ${select?.selectedOptions[0]?.textContent ?? experimentLabel()}`;
+    const title = `${system === 'box' ? words('1D хайрцаг', '1D box') : system === 'oscillator' ? words('Осциллятор', 'Oscillator') : t('qubit')} · ${select?.selectedOptions[0]?.textContent ?? experimentLabel()}`;
     const caption = `${element.querySelector             ('.panel-binding')?.innerText?.replace(/\s+/g, ' ').trim() ?? ''} · ℏ = 1 · ${source?.revision?.slice(0, 12) ?? 'local'}`;
     const p = panels[mode].find(p => p.id === Number(element.dataset.panel));
     const bound = p?.pinned ?? binding();
-    const metadata = system === 'box' ? boxFigureMetadata(element.dataset.panel ) : { ...qubitData(bound).metadata, state: bound.r, cursor: bound.mode === 'time' ? timePoint(bound.time, bound.timeIndex).t : bound.mode === 'family' ? bound.family.points[bound.familyIndex].lambda : null, branch: bound.branch, panel: p ? { tool: p.tool, basis: p.basis, gamma: p.gamma, pinned: !!p.pinned } : null };
+    const metadata = system === 'box' ? boxFigureMetadata(element.dataset.panel ) : system === 'oscillator' ? oscillatorFigureMetadata(element.dataset.panel ) : { ...qubitData(bound).metadata, state: bound.r, cursor: bound.mode === 'time' ? timePoint(bound.time, bound.timeIndex).t : bound.mode === 'family' ? bound.family.points[bound.familyIndex].lambda : null, branch: bound.branch, panel: p ? { tool: p.tool, basis: p.basis, gamma: p.gamma, pinned: !!p.pinned } : null };
     downloadText(`${name}-figure.svg`, figureSvg(svg, title, caption, { ...metadata, provenance }), 'image/svg+xml');
   }
 }
@@ -311,6 +319,7 @@ app.addEventListener('click', event => {
   const action = target.dataset.action, id = Number(target.dataset.id);
   if (action?.startsWith('export-')) { exportCurrent(action); return; }
   if (system === 'box' && action !== 'language') { captureBoxDetails(app); if (handleBoxClick(target)) render(false); return; }
+  if (system === 'oscillator' && action !== 'language') { captureOscillatorDetails(app); if (handleOscillatorClick(target)) render(false); return; }
   const p = panels[mode].find(x => x.id === id);
   const form = target.closest('form');
   if (form && !form.reportValidity()) return;
@@ -373,6 +382,19 @@ app.addEventListener('click', event => {
 app.addEventListener('input', event => {
   const input = event.target                    ;
   if (system === 'box') { handleBoxInput(input); refreshBoxInputs(app, input, input.id === 'box-time' || input.id === 'box-time-value'); return; }
+  if (system === 'oscillator') {
+    if (handleOscillatorInput(input) && input.dataset.oscCoordinate) {
+      // Keep the active range control mounted during pointer dragging.
+      const output = document.querySelector                   (`label[for="${input.id}"] output`);
+      if (output) output.textContent = input.dataset.oscCoordinate === 'time'
+        ? `t=${fmt(Number(input.value), 4)}` : `k=${Math.round(Number(input.value))}`;
+    } else if (input.dataset.oscDraft) {
+      // Do not remount a number input mid-typing or on blur before button clicks.
+      const note = document.querySelector             ('#osc-notice');
+      if (note) note.textContent = words('Оролт өөрчлөгдсөн — шинэ үр дүнг тооцоолно уу.', 'Inputs changed — calculate to replace this result.');
+    }
+    return;
+  }
   if (input.id === 'coordinate') { setCoordinate(Number(input.value)); return; }
   const key = input.dataset.draft                                  ;
   if (key && input.type !== 'select-one') {
@@ -388,12 +410,16 @@ app.addEventListener('input', event => {
 app.addEventListener('change', event => {
   const input = event.target                                        ;
   if (input.id === 'system-select') { selectSystem(input.value          ); render(); return; }
-  if (input.id === 'experiment-select') { if (system === 'qubit') selectMode(input.value        ); else { captureBoxDetails(app); selectBoxExperiment(input.value           ); } render(); return; }
+  if (input.id === 'experiment-select') { if (system === 'qubit') selectMode(input.value        ); else if (system === 'box') { captureBoxDetails(app); selectBoxExperiment(input.value           ); } else { captureOscillatorDetails(app); selectOscillatorExperiment(input.value                  ); } render(); return; }
   if (system === 'box') {
     if (handleBoxChange(input)) {
       if (input.tagName === 'INPUT') refreshBoxInputs(app, input);
       else render();
     }
+    return;
+  }
+  if (system === 'oscillator') {
+    if (input.dataset.oscCoordinate && handleOscillatorChange(input)) render(false);
     return;
   }
   if (input.dataset.panelBasis) { const p = panels[mode].find(p => p.id === Number(input.dataset.panelBasis)); if (p) p.basis = input.value        ; render(); }

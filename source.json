@@ -1,11 +1,12 @@
 {
-  "version": "0.2.0",
-  "revision": "420f9123dec1e807a2c98765ea163dfc1ca8e7a9",
+  "version": "0.3.0",
+  "revision": "90ae3ae10e9fbe04536b42017db0a1363d946074",
   "sourceFile": "src/quantum.ts",
   "sourceHash": "afb8c0a4e0694a761de21fc544d5a880c59576c10db2c26480db127514fcb360",
   "sourceFiles": {
     "src/quantum.ts": "afb8c0a4e0694a761de21fc544d5a880c59576c10db2c26480db127514fcb360",
-    "src/box.ts": "dd86f98098f57e7c8709889adec62cdb9ed39483c1fd419dcc43e885b7b125fa"
+    "src/box.ts": "dd86f98098f57e7c8709889adec62cdb9ed39483c1fd419dcc43e885b7b125fa",
+    "src/oscillator.ts": "7538c443dd7e56578018d8b431aa4043dc86ae4e62239ba1a54cd01cf4a41085"
   },
   "snippets": {
     "probabilities": {
@@ -63,6 +64,27 @@
       "endLine": 240,
       "sourceFile": "src/box.ts",
       "sourceHash": "dd86f98098f57e7c8709889adec62cdb9ed39483c1fd419dcc43e885b7b125fa"
+    },
+    "oscillator-coherent": {
+      "code": "export function coherentCoefficients(alpha: Complex, count: number): { coeffs: Complex[]; retainedWeight: number } {\n  if (!Number.isInteger(count) || count < 1 || count > MAX_OSC_MODES) throw new RangeError('basis size must be 1–32');\n  if (![alpha.re, alpha.im].every(Number.isFinite) || abs2(alpha) > 25) throw new RangeError('invalid coherent amplitude');\n  const prefactor = Math.exp(-abs2(alpha) / 2), coeffs: Complex[] = [];\n  let power: Complex = { re: 1, im: 0 }, sqrtFact = 1;\n  for (let n = 0; n < count; n++) {\n    if (n > 0) {\n      const old = power;\n      power = { re: old.re * alpha.re - old.im * alpha.im, im: old.re * alpha.im + old.im * alpha.re };\n      sqrtFact *= Math.sqrt(n);\n    }\n    coeffs.push({ re: prefactor * power.re / sqrtFact, im: prefactor * power.im / sqrtFact });\n  }\n  const retainedWeight = coeffs.reduce((s, z) => s + abs2(z), 0);\n  return { coeffs: normalizeOscillator(coeffs), retainedWeight };\n}",
+      "startLine": 39,
+      "endLine": 54,
+      "sourceFile": "src/oscillator.ts",
+      "sourceHash": "7538c443dd7e56578018d8b431aa4043dc86ae4e62239ba1a54cd01cf4a41085"
+    },
+    "oscillator-ritz": {
+      "code": "export function rayleighRitzGround(count: number, coupling: number): AnharmonicRun {\n  const h = anharmonicHamiltonian(count, coupling), eig = jacobiEigen(h), vector = eig.vectors[0], energy = eig.values[0];\n  const hv = h.map(row => row.reduce((s, value, j) => s + value * vector[j], 0));\n  const residual = Math.sqrt(hv.reduce((s, value, i) => s + (value - energy * vector[i]) ** 2, 0));\n  const moments = oscillatorMoments(vector.map(re => ({ re, im: 0 })), { mass: 1, omega: 1 });\n  return { coupling, basisSize: count, energy, vector: [...vector], residual, x2: moments.varianceX + moments.meanX * moments.meanX };\n}",
+      "startLine": 162,
+      "endLine": 168,
+      "sourceFile": "src/oscillator.ts",
+      "sourceHash": "7538c443dd7e56578018d8b431aa4043dc86ae4e62239ba1a54cd01cf4a41085"
+    },
+    "oscillator-variational": {
+      "code": "export function optimizeGaussian(coupling: number, beta0: number, step: number, iterations: number): VariationalRun {\n  if (!Number.isInteger(iterations) || iterations < 1 || iterations > 500 || !Number.isFinite(step) || step <= 0 || step > 2 || !Number.isFinite(beta0) || beta0 <= 0 || beta0 > 20) throw new RangeError('invalid optimizer settings');\n  let beta = beta0; const points: VariationalPoint[] = [];\n  for (let k = 0; k <= iterations; k++) {\n    const energy = gaussianEnergy(beta, coupling), gradient = gaussianGradient(beta, coupling);\n    points.push({ iteration: k, beta, energy, gradient });\n    if (k === iterations) break;\n    let trialStep = step;\n    let next = beta;\n    for (let attempt = 0; attempt < 12; attempt++) {\n      const candidate = Math.max(0.05, Math.min(20, beta - trialStep * gradient));\n      if (gaussianEnergy(candidate, coupling) <= energy) { next = candidate; break; }\n      trialStep *= 0.5;\n    }\n    beta = next;\n  }\n  return { coupling, beta0, step, iterations, points };\n}",
+      "startLine": 180,
+      "endLine": 197,
+      "sourceFile": "src/oscillator.ts",
+      "sourceHash": "7538c443dd7e56578018d8b431aa4043dc86ae4e62239ba1a54cd01cf4a41085"
     }
   }
 }
