@@ -52,3 +52,46 @@ test('oscillator CSV export labels the active coordinate correctly', async ({ pa
   expect(text2).toContain('algorithm iteration');
   expect(text2).toContain('rr_energy');
 });
+
+test('oscillator participates in System navigation and retains its experiment selection', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('[data-lang="en"]').click();
+  await expect(page.locator('#system-select option')).toHaveCount(3);
+  await page.locator('#system-select').selectOption('oscillator');
+  await expect(page.locator('h1')).toContainText('Coherent');
+  await page.locator('#experiment-select').selectOption('methods');
+  await expect(page.locator('h1')).toContainText('Anharmonic');
+  await page.locator('#system-select').selectOption('box');
+  await page.locator('#system-select').selectOption('oscillator');
+  await expect(page.locator('#experiment-select')).toHaveValue('methods');
+  await expect(page.locator('h1')).toContainText('Anharmonic');
+});
+
+test('invalid oscillator method inputs do not partially update the previous result', async ({ page }) => {
+  await page.goto('/?system=oscillator');
+  await page.locator('[data-lang="en"]').click();
+  await page.locator('#experiment-select').selectOption('methods');
+  const oldResult = await page.locator('#osc-method-comparison .panel-binding').innerText();
+  await page.locator('#osc-coupling').fill('0.8');
+  await page.locator('#osc-beta0').fill('0.001');
+  await page.locator('[data-action="osc-calculate-methods"]').click();
+  await expect(page.locator('#osc-notice')).toContainText('Check the inputs');
+  await expect(page.locator('#osc-method-comparison .panel-binding')).toHaveText(oldResult);
+});
+
+test('corrupt saved oscillator history is rejected atomically', async ({ page }) => {
+  await page.goto('/?system=oscillator');
+  await page.locator('[data-lang="en"]').click();
+  await page.locator('#experiment-select').selectOption('methods');
+  await page.locator('[data-action="osc-save-workspace"]').first().click();
+  await page.evaluate(() => {
+    const key = 'quantum-oscillator-workspace-v1';
+    const saved = JSON.parse(localStorage.getItem(key)!);
+    saved.motionRun.points = [];
+    localStorage.setItem(key, JSON.stringify(saved));
+  });
+  const before = await page.locator('#osc-method-comparison .panel-binding').innerText();
+  await page.locator('[data-action="osc-restore-workspace"]').click();
+  await expect(page.locator('#osc-notice')).toContainText('Check the inputs');
+  await expect(page.locator('#osc-method-comparison .panel-binding')).toHaveText(before);
+});

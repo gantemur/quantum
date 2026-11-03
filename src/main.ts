@@ -13,7 +13,8 @@ type Binding = { mode: Mode; r: Vec3 | null; time: TimeRun; family: FamilyRun; b
 type Panel = { id: number; tool: Tool; basis: Axis; gamma: number; collapsed: boolean; pinned: Binding | null };
 type SourceInfo = { version: string; revision: string | null; sourceHash: string; sourceFile: string; sourceFiles?: Record<string, string>; snippets: Record<string, { code: string; startLine: number; endLine: number; sourceFile?: string; sourceHash?: string }> };
 type System = 'qubit' | 'box' | 'oscillator';
-let system: System = new URLSearchParams(location.search).get('system') === 'oscillator' ? 'oscillator' : 'qubit';
+const requestedSystem = new URLSearchParams(location.search).get('system');
+let system: System = requestedSystem === 'box' || requestedSystem === 'oscillator' ? requestedSystem : 'qubit';
 
 let lab = createLab();
 let mode: Mode = 'state';
@@ -230,7 +231,7 @@ function navigation(): string {
     : words('Тогтмол энергийн магадлалтай үед интерференц ба байрлалын дундаж хэрхэн өөрчлөгдөх вэ?', 'How do interference and mean position evolve while energy probabilities stay fixed?'))
     : system === 'oscillator' ? (getOscillatorMode() === 'motion' ? words('Когерент төлөвийн квант дундаж классик хөдөлгөөнтэй хэрхэн холбогдох вэ?', 'How does coherent-state quantum motion track the classical oscillator?') : words('Вариац ба Рэлей–Ритц нэг үндсэн төлөвийг хэр сайн ойролцоо болгох вэ?', 'How well do variational and Rayleigh–Ritz methods approximate the same ground state?'))
     : words({ state: 'Бэлтгэл, эргэлт, хэмжилт төлөв болон дараагийн үр дүнг хэрхэн өөрчлөх вэ?', time: 'Өгөгдсөн эхний төлөв тогтмол Гамильтонианы дор хэрхэн хувьсах вэ?', family: 'Гамильтониан өөрчлөгдөхөд энерги ба хувийн төлөвүүд хэрхэн өөрчлөгдөх вэ?' }[mode], { state: 'How do preparation, rotation, and measurement change the state and later outcomes?', time: 'How does a chosen initial state evolve under a fixed Hamiltonian?', family: 'How do energies and eigenstates change across a family of Hamiltonians?' }[mode]);
-  return `<section class="experiment-navigation" aria-label="${words('Систем ба туршилт', 'System and experiment')}"><div class="context-selectors"><label for="system-select"><span class="eyebrow">${words('Систем', 'System')}</span><select id="system-select">${option('qubit', words('Кубит · хоёр төлөвт систем', 'Qubit · two-level system'), system)}${option('box', words('Хязгааргүй 1D хайрцаг', 'Infinite 1D box'), system)}</select></label><span class="context-arrow" aria-hidden="true">›</span><label for="experiment-select"><span class="eyebrow">${words('Туршилт', 'Experiment')}</span><select id="experiment-select">${experiments.map(([value, label]) => option(value, label, system === 'qubit' ? mode : system === 'box' ? getBoxMode() : getOscillatorMode())).join('')}</select></label><a class="system-link" href="?system=oscillator">${words('Осциллятор', 'Oscillator')}</a><span class="unit-label">ℏ = 1</span></div><h1>${experimentLabel()}</h1><p class="experiment-question">${question}</p><p class="navigation-help">${words('Туршилт солиход тохиргоо, үр дүн, самбарууд хадгалагдана. Төлөв дамжуулахдаа тусгай товчийг ашиглана.', 'Switching experiments preserves settings, results, and panels. Use an explicit transfer to carry a state into another experiment.')}</p></section>`;
+  return `<section class="experiment-navigation" aria-label="${words('Систем ба туршилт', 'System and experiment')}"><div class="context-selectors"><label for="system-select"><span class="eyebrow">${words('Систем', 'System')}</span><select id="system-select">${option('qubit', words('Кубит · хоёр төлөвт систем', 'Qubit · two-level system'), system)}${option('box', words('Хязгааргүй 1D хайрцаг', 'Infinite 1D box'), system)}${option('oscillator', words('Гармоник осциллятор', 'Harmonic oscillator'), system)}</select></label><span class="context-arrow" aria-hidden="true">›</span><label for="experiment-select"><span class="eyebrow">${words('Туршилт', 'Experiment')}</span><select id="experiment-select">${experiments.map(([value, label]) => option(value, label, system === 'qubit' ? mode : system === 'box' ? getBoxMode() : getOscillatorMode())).join('')}</select></label><span class="unit-label">ℏ = 1</span></div><h1>${experimentLabel()}</h1><p class="experiment-question">${question}</p><p class="navigation-help">${words('Туршилт солиход тохиргоо, үр дүн, самбарууд хадгалагдана. Төлөв дамжуулахдаа тусгай товчийг ашиглана.', 'Switching experiments preserves settings, results, and panels. Use an explicit transfer to carry a state into another experiment.')}</p></section>`;
 }
 function resultStatus(): string {
   let dirty = false;
@@ -290,7 +291,7 @@ function exportCurrent(kind: string): void {
   saveSession();
   const experiment = system === 'qubit' ? mode : system === 'box' ? getBoxMode() : getOscillatorMode();
   const name = `quantum-${system}-${experiment}`;
-  const provenance = { version: source?.version ?? '0.2.0', sourceRevision: source?.revision ?? null, numericalSourceHashes: source?.sourceFiles ?? null };
+  const provenance = { version: source?.version ?? '0.3.0', sourceRevision: source?.revision ?? null, numericalSourceHashes: source?.sourceFiles ?? null };
   if (kind === 'export-setup') {
     const setup = { kind: 'quantum-lab-setup', schemaVersion: 1, scope: 'active experiment; setup record, not full session restoration', system, experiment, provenance, setup: system === 'box' ? boxExportSetup() : system === 'oscillator' ? oscillatorExportSetup() : { prepared: lab.prepared, current: lab.current, draft, initialStateOrigin: sessions[mode].origin, transferSource: sessions[mode].transfer, seed: lab.seed, actualResult: mode === 'time' ? { id: lab.time.id, initial: lab.time.initial, h: lab.time.h, end: lab.time.end, method: lab.time.method } : mode === 'family' ? { id: lab.family.id, delta: lab.family.delta } : { operationCount: lab.operationCount }, cursor: mode === 'time' ? { index: timeIndex, t: timePoint(lab.time, timeIndex).t } : mode === 'family' ? { index: familyIndex, lambda: lab.family.points[familyIndex].lambda, branch } : null, panels: panels[mode].map(p => ({ id: p.id, tool: p.tool, basis: p.basis, gamma: p.gamma, collapsed: p.collapsed, pinned: p.pinned ? { label: bindingLabel(p.pinned), state: p.pinned.r, mode: p.pinned.mode, result: p.pinned.mode === 'time' ? { id: p.pinned.time.id, initial: p.pinned.time.initial, h: p.pinned.time.h, end: p.pinned.time.end, method: p.pinned.time.method, t: timePoint(p.pinned.time, p.pinned.timeIndex).t } : p.pinned.mode === 'family' ? { id: p.pinned.family.id, delta: p.pinned.family.delta, lambda: p.pinned.family.points[p.pinned.familyIndex].lambda, branch: p.pinned.branch } : { operations: p.pinned.operations, batch: p.pinned.batch } } : null })) } };
     downloadText(`${name}-setup.json`, JSON.stringify(setup, null, 2) + '\n', 'application/json');
@@ -381,7 +382,19 @@ app.addEventListener('click', event => {
 app.addEventListener('input', event => {
   const input = event.target as HTMLInputElement;
   if (system === 'box') { handleBoxInput(input); refreshBoxInputs(app, input, input.id === 'box-time' || input.id === 'box-time-value'); return; }
-  if (system === 'oscillator') { if (handleOscillatorInput(input)) render(false); return; }
+  if (system === 'oscillator') {
+    if (handleOscillatorInput(input) && input.dataset.oscCoordinate) {
+      // Keep the active range control mounted during pointer dragging.
+      const output = document.querySelector<HTMLOutputElement>(`label[for="${input.id}"] output`);
+      if (output) output.textContent = input.dataset.oscCoordinate === 'time'
+        ? `t=${fmt(Number(input.value), 4)}` : `k=${Math.round(Number(input.value))}`;
+    } else if (input.dataset.oscDraft) {
+      // Do not remount a number input mid-typing or on blur before button clicks.
+      const note = document.querySelector<HTMLElement>('#osc-notice');
+      if (note) note.textContent = words('Оролт өөрчлөгдсөн — шинэ үр дүнг тооцоолно уу.', 'Inputs changed — calculate to replace this result.');
+    }
+    return;
+  }
   if (input.id === 'coordinate') { setCoordinate(Number(input.value)); return; }
   const key = input.dataset.draft as keyof typeof draft | undefined;
   if (key && input.type !== 'select-one') {
@@ -397,12 +410,16 @@ app.addEventListener('input', event => {
 app.addEventListener('change', event => {
   const input = event.target as HTMLInputElement | HTMLSelectElement;
   if (input.id === 'system-select') { selectSystem(input.value as System); render(); return; }
-  if (input.id === 'experiment-select') { if (system === 'qubit') selectMode(input.value as Mode); else { captureBoxDetails(app); selectBoxExperiment(input.value as BoxMode); } render(); return; }
+  if (input.id === 'experiment-select') { if (system === 'qubit') selectMode(input.value as Mode); else if (system === 'box') { captureBoxDetails(app); selectBoxExperiment(input.value as BoxMode); } else { captureOscillatorDetails(app); selectOscillatorExperiment(input.value as OscillatorMode); } render(); return; }
   if (system === 'box') {
     if (handleBoxChange(input)) {
       if (input.tagName === 'INPUT') refreshBoxInputs(app, input);
       else render();
     }
+    return;
+  }
+  if (system === 'oscillator') {
+    if (input.dataset.oscCoordinate && handleOscillatorChange(input)) render(false);
     return;
   }
   if (input.dataset.panelBasis) { const p = panels[mode].find(p => p.id === Number(input.dataset.panelBasis)); if (p) p.basis = input.value as Axis; render(); }

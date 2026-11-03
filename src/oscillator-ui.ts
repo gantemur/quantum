@@ -40,10 +40,6 @@ const numeric = (raw: string, min: number, max: number, integer = false): number
   if (!Number.isFinite(x) || x < min || x > max || (integer && !Number.isInteger(x))) throw new RangeError('invalid oscillator input');
   return x;
 };
-const nearestTime = (): number => {
-  const points = motionRun.points; if (timeCursor <= 0) return 0; if (timeCursor >= motionRun.end) return points.length - 1;
-  return Math.max(0, Math.min(points.length - 1, Math.round(timeCursor / motionRun.end * (points.length - 1))));
-};
 const selectedIteration = () => variational.points[Math.max(0, Math.min(variational.points.length - 1, iterationCursor))];
 
 export function getOscillatorMode(): OscillatorMode { return mode; }
