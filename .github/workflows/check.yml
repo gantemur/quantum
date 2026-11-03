@@ -1,8 +1,13 @@
 name: Scientific and browser checks
 
 on:
-  push:
   pull_request:
+  workflow_dispatch:
+
+# Superseded PR checks can stop instead of spending runner time.
+concurrency:
+  group: scientific-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
